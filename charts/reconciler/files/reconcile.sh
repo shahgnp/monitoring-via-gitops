@@ -80,6 +80,8 @@ ensure_membership() {
       ORG=1 gf DELETE "/api/orgs/$other/users/$uid"
     fi
   done < <(jq -r --argjson o "$org" '.[] | select(.orgId!=$o) | "\(.orgId)\t\(.name)"' <<<"$orgs")
+  # Deleting the personal org leaves the user's current org dangling.
+  ORG=1 gf POST "/api/users/$uid/using/$org"
 }
 
 upsert_datasource() {
