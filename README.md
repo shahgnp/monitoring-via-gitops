@@ -4,7 +4,7 @@ RKE2 (CIS profile) on AWS plus a GitOps-managed, multi-tenant monitoring stack d
 
 | Layer | What |
 |---|---|
-| Cluster | RKE2 `v1.37.1+rke2r1`, `profile: cis`, Calico, 3 control-plane + 3 worker nodes (Ubuntu 24.04, `us-east-1a`) |
+| Cluster | RKE2 `v1.37.1+rke2r1`, `profile: cis`, Calico, 3 control-plane (`c7i-flex.large`, 4 GiB) + 3 worker (`m7i-flex.large`, 8 GiB) nodes, Ubuntu 24.04, `us-east-1a` |
 | Control-plane endpoint | AWS NLB (6443/9345). kube-vip is deployed as a static pod but its ARP VIP is not reachable inside a VPC |
 | Cloud integration | aws-cloud-controller-manager (Service type `LoadBalancer` creates an NLB) |
 | GitOps | ArgoCD installed on the new cluster, app-of-apps from `apps/` |

@@ -27,6 +27,8 @@ tls-san:
 profile: cis
 cni: calico
 cloud-provider-name: external
+# RKE2's embedded cloud controller would claim the nodes (providerID rke2://) and block the AWS one.
+disable-cloud-controller: true
 disable:
   - rke2-ingress-nginx
   - rke2-traefik
@@ -46,6 +48,9 @@ mkdir -p /var/lib/rancher/rke2/agent/pod-manifests
 cat > /var/lib/rancher/rke2/agent/pod-manifests/kube-vip.yaml <<'KUBEVIP_EOF'
 ${kube_vip_manifest}
 KUBEVIP_EOF
+# The NIC name differs between instance families.
+VIP_IFACE=$(ip -o -4 route show to default | awk '{print $5}' | head -n1)
+sed -i "s/__VIP_IFACE__/$VIP_IFACE/" /var/lib/rancher/rke2/agent/pod-manifests/kube-vip.yaml
 
 %{ endif ~}
 %{ if first ~}

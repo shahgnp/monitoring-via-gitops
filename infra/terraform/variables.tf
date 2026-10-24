@@ -49,14 +49,15 @@ variable "worker_count" {
   default = 3
 }
 
+# This account is on the AWS free plan, which only allows free-tier-eligible instance types.
 variable "control_plane_instance_type" {
   type    = string
-  default = "t3.medium"
+  default = "c7i-flex.large"
 }
 
 variable "worker_instance_type" {
   type    = string
-  default = "t3.large"
+  default = "m7i-flex.large"
 }
 
 variable "control_plane_volume_gb" {
