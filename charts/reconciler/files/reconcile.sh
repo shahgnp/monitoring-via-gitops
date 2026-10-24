@@ -41,7 +41,7 @@ ensure_org() {
 }
 
 ensure_user() {
-  local login=$1 email=$2 pass=$3 uid
+  local login=$1 email=$2 pass=$3 org=$4 uid
   ORG=1 gf GET "/api/users/lookup?loginOrEmail=$(jq -rn --arg n "$login" '$n|@uri')"
   if [[ $CODE == 200 ]]; then
     uid=$(jq -r .id <<<"$OUT")
@@ -51,8 +51,8 @@ ensure_user() {
       [[ $CODE == 200 ]] || log "user $login: password update failed ($CODE) $OUT"
     fi
   else
-    ORG=1 gf POST /api/admin/users "$(jq -n --arg n "$login" --arg e "$email" --arg l "$login" --arg p "$pass" \
-      '{name:$n,email:$e,login:$l,password:$p}')"
+    ORG=1 gf POST /api/admin/users "$(jq -n --arg n "$login" --arg e "$email" --arg l "$login" --arg p "$pass" --argjson o "$org" \
+      '{name:$n,email:$e,login:$l,password:$p,orgId:$o}')"
     [[ $CODE == 200 ]] || { log "user $login: create failed ($CODE) $OUT"; return 1; }
     uid=$(jq -r .id <<<"$OUT")
   fi
@@ -60,8 +60,9 @@ ensure_user() {
 }
 
 # The user must be a Viewer in the tenant org and in no other org.
+# Grafana creates a personal org (named after the email) with Admin rights for every new user; delete it.
 ensure_membership() {
-  local uid=$1 org=$2 login=$3 orgs current other
+  local uid=$1 org=$2 login=$3 email=$4 orgs current other name
   ORG=1 gf GET "/api/users/$uid/orgs"
   orgs=$OUT
   current=$(jq -r --argjson o "$org" '.[] | select(.orgId==$o) | .role' <<<"$orgs")
@@ -71,9 +72,14 @@ ensure_membership() {
   elif [[ "$current" != "Viewer" ]]; then
     ORG=1 gf PATCH "/api/orgs/$org/users/$uid" '{"role":"Viewer"}'
   fi
-  for other in $(jq -r --argjson o "$org" '.[] | select(.orgId!=$o) | .orgId' <<<"$orgs"); do
-    ORG=1 gf DELETE "/api/orgs/$other/users/$uid"
-  done
+  while IFS=$'\t' read -r other name; do
+    [[ -n "$other" ]] || continue
+    if [[ "$other" != 1 && ( "$name" == "$email" || "$name" == "$login" ) ]]; then
+      ORG=1 gf DELETE "/api/orgs/$other"
+    else
+      ORG=1 gf DELETE "/api/orgs/$other/users/$uid"
+    fi
+  done < <(jq -r --argjson o "$org" '.[] | select(.orgId!=$o) | "\(.orgId)\t\(.name)"' <<<"$orgs")
 }
 
 upsert_datasource() {
@@ -99,8 +105,8 @@ reconcile_tenant() {
   local tenant=$1 namespace=$2 login=$3 email=$4 pass=$5 prom_url=$6 org uid
   log "tenant $tenant (namespace $namespace)"
   org=$(ensure_org "$tenant") || return 1
-  uid=$(ensure_user "$login" "$email" "$pass") || return 1
-  ensure_membership "$uid" "$org" "$login"
+  uid=$(ensure_user "$login" "$email" "$pass" "$org") || return 1
+  ensure_membership "$uid" "$org" "$login" "$email"
 
   upsert_datasource "$org" "prom-$tenant" "$(jq -n --arg u "$prom_url" --arg id "prom-$tenant" \
     '{name:"Prometheus",uid:$id,type:"prometheus",access:"proxy",url:$u,isDefault:true,jsonData:{timeInterval:"30s"}}')"
