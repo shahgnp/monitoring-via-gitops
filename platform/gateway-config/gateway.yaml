@@ -1,0 +1,60 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: grafana-tls
+  namespace: istio-ingress
+spec:
+  secretName: grafana-tls
+  duration: 8760h
+  dnsNames:
+    - grafana.poc.local
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: poc-ca
+    kind: ClusterIssuer
+---
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: main-gateway
+  namespace: istio-ingress
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    - port:
+        number: 443
+        name: https
+        protocol: HTTPS
+      hosts:
+        - grafana.poc.local
+      tls:
+        mode: SIMPLE
+        credentialName: grafana-tls
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        - grafana.poc.local
+      tls:
+        httpsRedirect: true
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: grafana
+  namespace: istio-ingress
+spec:
+  hosts:
+    - grafana.poc.local
+  gateways:
+    - main-gateway
+  http:
+    - route:
+        - destination:
+            host: grafana.monitoring.svc.cluster.local
+            port:
+              number: 80

@@ -1,0 +1,31 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: aws-cloud-controller-manager
+  namespace: kube-system
+spec:
+  repo: https://kubernetes.github.io/cloud-provider-aws
+  chart: aws-cloud-controller-manager
+  version: "${chart_version}"
+  targetNamespace: kube-system
+  bootstrap: true
+  valuesContent: |-
+    image:
+      tag: ${image_tag}
+    hostNetworking: true
+    args:
+      - --v=2
+      - --cloud-provider=aws
+      - --cluster-name=${cluster_name}
+      - --configure-cloud-routes=false
+    nodeSelector:
+      node-role.kubernetes.io/control-plane: "true"
+    tolerations:
+      - key: node.cloudprovider.kubernetes.io/uninitialized
+        value: "true"
+        effect: NoSchedule
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule

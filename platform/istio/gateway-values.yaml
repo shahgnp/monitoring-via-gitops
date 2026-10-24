@@ -1,0 +1,13 @@
+labels:
+  istio: ingressgateway
+service:
+  type: LoadBalancer
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: nlb
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+autoscaling:
+  enabled: false
+replicaCount: 1

@@ -1,0 +1,17 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!terraform.tfvars.example
+crash.log
+
+# Cluster access and credentials
+kubeconfig*
+*.kubeconfig
+*.pem
+*.key
+id_*
+token*
+*-token
+.env

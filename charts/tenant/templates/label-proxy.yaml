@@ -1,0 +1,71 @@
+{{- $name := include "tenant.proxyName" . -}}
+# Enforces namespace="<tenant namespace>" on every query that goes through it.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Values.monitoringNamespace }}
+  labels:
+    app.kubernetes.io/name: prom-label-proxy
+    tenant: {{ .Values.tenant | quote }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: prom-label-proxy
+      tenant: {{ .Values.tenant | quote }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: prom-label-proxy
+        tenant: {{ .Values.tenant | quote }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: proxy
+          image: {{ .Values.labelProxy.image }}
+          args:
+            - --insecure-listen-address=0.0.0.0:8080
+            - --upstream={{ .Values.prometheusUrl }}
+            - --label=namespace
+            - --label-value={{ .Values.namespace }}
+            - --enable-label-apis
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            tcpSocket:
+              port: http
+          resources:
+            requests:
+              cpu: 10m
+              memory: 24Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Values.monitoringNamespace }}
+  labels:
+    tenant: {{ .Values.tenant | quote }}
+spec:
+  selector:
+    app.kubernetes.io/name: prom-label-proxy
+    tenant: {{ .Values.tenant | quote }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

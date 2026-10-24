@@ -1,0 +1,7 @@
+namespace: monitoring
+image: alpine/k8s:1.37.1
+schedule: "*/2 * * * *"
+grafana:
+  url: http://grafana.monitoring.svc.cluster.local
+  adminSecret: grafana
+lokiUrl: http://loki.monitoring.svc.cluster.local:3100

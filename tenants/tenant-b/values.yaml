@@ -1,0 +1,8 @@
+# Demo tenant. The directory name must equal the namespace; Grafana sees only this namespace.
+tenant: tenant-b
+namespace: tenant-b
+grafana:
+  login: tenant-b
+  email: tenant-b@poc.local
+  # PoC credential in plaintext (no secret management in this setup).
+  password: TenantB-Poc-2026

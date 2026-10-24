@@ -1,0 +1,162 @@
+fullnameOverride: kps
+
+defaultRules:
+  create: true
+
+alertmanager:
+  alertmanagerSpec:
+    # Selects tenant AlertmanagerConfig objects; the operator forces a namespace matcher on each.
+    alertmanagerConfigSelector: {}
+    alertmanagerConfigNamespaceSelector: {}
+    alertmanagerConfigMatcherStrategy:
+      type: OnNamespace
+    resources:
+      requests:
+        cpu: 10m
+        memory: 64Mi
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: longhorn
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 2Gi
+
+prometheus:
+  prometheusSpec:
+    retention: 7d
+    retentionSize: 12GB
+    scrapeInterval: 30s
+    evaluationInterval: 30s
+    # Select ServiceMonitors, PodMonitors, rules and probes from every namespace.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    resources:
+      requests:
+        cpu: 200m
+        memory: 1Gi
+      limits:
+        memory: 2Gi
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: longhorn
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 15Gi
+
+prometheusOperator:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+
+# RKE2 control-plane components run as static pods labelled component=<name>.
+kubeEtcd:
+  enabled: true
+  service:
+    enabled: true
+    port: 2381
+    targetPort: 2381
+    selector:
+      component: etcd
+  serviceMonitor:
+    scheme: http
+
+kubeControllerManager:
+  enabled: true
+  service:
+    enabled: true
+    port: 10257
+    targetPort: 10257
+    selector:
+      component: kube-controller-manager
+  serviceMonitor:
+    https: true
+    insecureSkipVerify: true
+
+kubeScheduler:
+  enabled: true
+  service:
+    enabled: true
+    port: 10259
+    targetPort: 10259
+    selector:
+      component: kube-scheduler
+  serviceMonitor:
+    https: true
+    insecureSkipVerify: true
+
+kubeProxy:
+  enabled: true
+  service:
+    enabled: true
+    port: 10249
+    targetPort: 10249
+    selector:
+      component: kube-proxy
+
+kubeDns:
+  enabled: false
+coreDns:
+  enabled: true
+
+kube-state-metrics:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+
+# Control-plane nodes are tainted CriticalAddonsOnly; run on them too to cover their host metrics.
+prometheus-node-exporter:
+  tolerations:
+    - operator: Exists
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+
+grafana:
+  enabled: true
+  fullnameOverride: grafana
+  # PoC credentials; rotate before any real use.
+  adminUser: admin
+  adminPassword: Adm1n-Poc-2026
+  deploymentStrategy:
+    type: Recreate
+  persistence:
+    enabled: true
+    type: pvc
+    storageClassName: longhorn
+    accessModes: [ReadWriteOnce]
+    size: 2Gi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 192Mi
+  grafana.ini:
+    server:
+      domain: grafana.poc.local
+      root_url: https://grafana.poc.local
+    users:
+      allow_sign_up: false
+      allow_org_create: false
+      auto_assign_org: false
+    auth.anonymous:
+      enabled: false
+    analytics:
+      reporting_enabled: false
+      check_for_updates: false
+  sidecar:
+    dashboards:
+      enabled: true
+      searchNamespace: ALL
+      label: grafana_dashboard
+    datasources:
+      enabled: true
+      defaultDatasourceEnabled: true
+      isDefaultDatasource: true

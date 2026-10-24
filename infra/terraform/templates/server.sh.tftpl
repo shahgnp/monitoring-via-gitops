@@ -1,0 +1,67 @@
+#!/bin/bash
+set -euxo pipefail
+exec > >(tee /var/log/rke2-bootstrap.log) 2>&1
+export DEBIAN_FRONTEND=noninteractive
+
+apt-get update
+apt-get install -y open-iscsi nfs-common curl jq
+systemctl enable --now iscsid
+
+# CIS host prerequisite: etcd must run as the etcd user.
+id etcd >/dev/null 2>&1 || useradd -r -c "etcd user" -s /sbin/nologin -M etcd -U
+
+# The external cloud provider matches nodes by their EC2 private DNS name.
+IMDS_TOKEN=$(curl -sX PUT http://169.254.169.254/latest/api/token -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
+NODE_NAME=$(curl -s -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.169.254/latest/meta-data/hostname)
+
+mkdir -p /etc/rancher/rke2
+cat > /etc/rancher/rke2/config.yaml <<EOF
+token: ${token}
+node-name: $NODE_NAME
+%{ if !first ~}
+server: https://${nlb_dns}:9345
+%{ endif ~}
+tls-san:
+  - ${nlb_dns}
+  - ${kube_vip_address}
+profile: cis
+cni: calico
+cloud-provider-name: external
+disable:
+  - rke2-ingress-nginx
+  - rke2-traefik
+node-taint:
+  - CriticalAddonsOnly=true:NoExecute
+etcd-expose-metrics: true
+kube-controller-manager-arg:
+  - bind-address=0.0.0.0
+kube-scheduler-arg:
+  - bind-address=0.0.0.0
+kube-proxy-arg:
+  - metrics-bind-address=0.0.0.0:10249
+EOF
+
+%{ if enable_kube_vip ~}
+mkdir -p /var/lib/rancher/rke2/agent/pod-manifests
+cat > /var/lib/rancher/rke2/agent/pod-manifests/kube-vip.yaml <<'KUBEVIP_EOF'
+${kube_vip_manifest}
+KUBEVIP_EOF
+
+%{ endif ~}
+%{ if first ~}
+mkdir -p /var/lib/rancher/rke2/server/manifests
+cat > /var/lib/rancher/rke2/server/manifests/aws-ccm.yaml <<'CCM_EOF'
+${aws_ccm_manifest}
+CCM_EOF
+cat > /var/lib/rancher/rke2/server/manifests/argocd.yaml <<'ARGO_EOF'
+${argocd_manifest}
+ARGO_EOF
+
+%{ endif ~}
+curl -sfL https://get.rke2.io | INSTALL_RKE2_VERSION="${rke2_version}" INSTALL_RKE2_TYPE="server" sh -
+
+# CIS kernel parameters must be applied before rke2 starts.
+cp -f /usr/local/share/rke2/rke2-cis-sysctl.conf /etc/sysctl.d/60-rke2-cis.conf
+systemctl restart systemd-sysctl
+
+systemctl enable --now rke2-server.service

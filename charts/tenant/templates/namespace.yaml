@@ -1,0 +1,32 @@
+{{- $_ := include "tenant.validate" . -}}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespace }}
+  labels:
+    tenant: {{ .Values.tenant | quote }}
+    pod-security.kubernetes.io/enforce: restricted
+---
+# CIS 5.1.5: default service accounts must not mount API tokens.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: default
+  namespace: {{ .Values.namespace }}
+automountServiceAccountToken: false
+---
+# Only the tenant's own pods and Prometheus (scraping) may reach the tenant's pods.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tenant-ingress
+  namespace: {{ .Values.namespace }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: {}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.monitoringNamespace }}

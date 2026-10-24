@@ -1,0 +1,6 @@
+apiVersion: v2
+name: reconciler
+description: CronJob that keeps Grafana orgs, users, datasources and dashboards in sync with the tenant registry Secrets
+type: application
+version: 0.1.0
+appVersion: "1.0"

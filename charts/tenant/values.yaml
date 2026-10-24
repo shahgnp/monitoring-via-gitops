@@ -1,0 +1,12 @@
+# Overridden by tenants/<name>/values.yaml.
+tenant: ""
+# One namespace per tenant; it must equal the tenants/<name> directory name.
+namespace: ""
+grafana:
+  login: ""
+  email: ""
+  password: ""
+monitoringNamespace: monitoring
+prometheusUrl: http://kps-prometheus.monitoring.svc.cluster.local:9090
+labelProxy:
+  image: quay.io/prometheuscommunity/prom-label-proxy:v0.13.0
