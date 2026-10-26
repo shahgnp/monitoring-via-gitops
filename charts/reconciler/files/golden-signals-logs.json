@@ -1,0 +1,407 @@
+{
+  "uid": "golden-signals-all",
+  "title": "Golden signals (logs) - all tenants",
+  "tags": ["sre", "golden-signals", "logs"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "1m",
+  "time": { "from": "now-1h", "to": "now" },
+  "description": "The four golden signals (latency, traffic, errors, saturation) derived from structured access logs in Loki.",
+  "templating": {
+    "list": [
+      {
+        "name": "ds",
+        "label": "Loki datasource",
+        "type": "datasource",
+        "query": "loki",
+        "refresh": 1,
+        "hide": 0,
+        "current": { "text": "Loki (all namespaces)", "value": "loki-all" }
+      },
+      {
+        "name": "namespace",
+        "label": "Tenant (namespace)",
+        "type": "query",
+        "datasource": { "type": "loki", "uid": "${ds}" },
+        "definition": "label_values(namespace)",
+        "query": { "label": "namespace", "refId": "LokiVariableQueryEditor-VariableQuery", "stream": "", "type": 1 },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".+",
+        "current": { "text": ["All"], "value": ["$__all"] }
+      },
+      {
+        "name": "app",
+        "label": "Application",
+        "type": "query",
+        "datasource": { "type": "loki", "uid": "${ds}" },
+        "definition": "label_values({namespace=~\"$namespace\"}, app)",
+        "query": { "label": "app", "refId": "LokiVariableQueryEditor-VariableQuery", "stream": "{namespace=~\"$namespace\"}", "type": 1 },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": { "text": ["All"], "value": ["$__all"] }
+      },
+      {
+        "name": "search",
+        "label": "Log search (regex)",
+        "type": "textbox",
+        "query": "",
+        "current": { "text": "", "value": "" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Service level overview (SLO target 99.5% availability)",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Availability (non-5xx)",
+      "datasource": { "type": "loki", "uid": "${ds}" },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 1 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 3,
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 99 },
+              { "color": "green", "value": 99.5 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "instant",
+          "expr": "100 * (1 - (sum(count_over_time({namespace=~\"$namespace\", app=~\"$app\"} | json | status=~\"5[0-9]{2}\" [$__range])) or vector(0)) / sum(count_over_time({namespace=~\"$namespace\", app=~\"$app\"} | json | status=~\"[0-9]{3}\" [$__range])))"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Traffic (requests/s)",
+      "datasource": { "type": "loki", "uid": "${ds}" },
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 1 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "decimals": 2 }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "area" },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "instant",
+          "expr": "sum(rate({namespace=~\"$namespace\", app=~\"$app\"} | json | status=~\"[0-9]{3}\" [$__range]))"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Error ratio (5xx)",
+      "datasource": { "type": "loki", "uid": "${ds}" },
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 1 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 0.5 },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "instant",
+          "expr": "100 * (sum(count_over_time({namespace=~\"$namespace\", app=~\"$app\"} | json | status=~\"5[0-9]{2}\" [$__range])) or vector(0)) / sum(count_over_time({namespace=~\"$namespace\", app=~\"$app\"} | json | status=~\"[0-9]{3}\" [$__range]))"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "p95 latency (worst tenant)",
+      "datasource": { "type": "loki", "uid": "${ds}" },
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 1 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 3,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 0.5 },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "instant",
+          "expr": "max(quantile_over_time(0.95, {namespace=~\"$namespace\", app=~\"$app\"} | json | status=~\"[0-9]{3}\" | unwrap request_time | __error__=\"\" [$__range]) by (namespace))"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "row",
+      "title": "Traffic - how much demand the services receive",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 },
+      "collapsed": false
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Requests/s by tenant",
+      "datasource": { "type": "loki", "uid": "${ds}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 7 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 15, "stacking": { "mode": "normal" } } }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (namespace) (rate({namespace=~\"$namespace\", app=~\"$app\"} | json | status=~\"[0-9]{3}\" [$__auto]))",
+          "legendFormat": "{{namespace}}"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Requests/s by status class",
+      "datasource": { "type": "loki", "uid": "${ds}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 7 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 15, "stacking": { "mode": "normal" } } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "legendFormat": "2xx", "expr": "sum(rate({namespace=~\"$namespace\", app=~\"$app\"} | json | status=~\"2[0-9]{2}\" [$__auto]))" },
+        { "refId": "B", "legendFormat": "3xx", "expr": "sum(rate({namespace=~\"$namespace\", app=~\"$app\"} | json | status=~\"3[0-9]{2}\" [$__auto]))" },
+        { "refId": "C", "legendFormat": "4xx", "expr": "sum(rate({namespace=~\"$namespace\", app=~\"$app\"} | json | status=~\"4[0-9]{2}\" [$__auto]))" },
+        { "refId": "D", "legendFormat": "5xx", "expr": "sum(rate({namespace=~\"$namespace\", app=~\"$app\"} | json | status=~\"5[0-9]{2}\" [$__auto]))" }
+      ]
+    },
+    {
+      "id": 20,
+      "type": "row",
+      "title": "Errors - rate of failing requests",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 15 },
+      "collapsed": false
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "5xx responses/s by tenant",
+      "datasource": { "type": "loki", "uid": "${ds}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "color": { "mode": "fixed", "fixedColor": "red" }, "custom": { "fillOpacity": 15 } }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (namespace) (rate({namespace=~\"$namespace\", app=~\"$app\"} | json | status=~\"5[0-9]{2}\" [$__auto]))",
+          "legendFormat": "{{namespace}}"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "Error ratio by tenant (%)",
+      "datasource": { "type": "loki", "uid": "${ds}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "custom": { "thresholdsStyle": { "mode": "line" } },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 0.5 }] }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * sum by (namespace) (rate({namespace=~\"$namespace\", app=~\"$app\"} | json | status=~\"5[0-9]{2}\" [$__auto])) / sum by (namespace) (rate({namespace=~\"$namespace\", app=~\"$app\"} | json | status=~\"[0-9]{3}\" [$__auto]))",
+          "legendFormat": "{{namespace}}"
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "type": "logs",
+      "title": "Recent 5xx log lines",
+      "datasource": { "type": "loki", "uid": "${ds}" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
+      "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true },
+      "targets": [
+        { "refId": "A", "expr": "{namespace=~\"$namespace\", app=~\"$app\"} | json | status=~\"5[0-9]{2}\"" }
+      ]
+    },
+    {
+      "id": 30,
+      "type": "row",
+      "title": "Latency - how long requests take (from request_time in the access log)",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 32 },
+      "collapsed": false
+    },
+    {
+      "id": 31,
+      "type": "timeseries",
+      "title": "Latency percentiles by tenant",
+      "datasource": { "type": "loki", "uid": "${ds}" },
+      "gridPos": { "h": 8, "w": 16, "x": 0, "y": 33 },
+      "fieldConfig": { "defaults": { "unit": "s", "min": 0 }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "p50 {{namespace}}",
+          "expr": "quantile_over_time(0.50, {namespace=~\"$namespace\", app=~\"$app\"} | json | status=~\"[0-9]{3}\" | unwrap request_time | __error__=\"\" [$__auto]) by (namespace)"
+        },
+        {
+          "refId": "B",
+          "legendFormat": "p95 {{namespace}}",
+          "expr": "quantile_over_time(0.95, {namespace=~\"$namespace\", app=~\"$app\"} | json | status=~\"[0-9]{3}\" | unwrap request_time | __error__=\"\" [$__auto]) by (namespace)"
+        },
+        {
+          "refId": "C",
+          "legendFormat": "p99 {{namespace}}",
+          "expr": "quantile_over_time(0.99, {namespace=~\"$namespace\", app=~\"$app\"} | json | status=~\"[0-9]{3}\" | unwrap request_time | __error__=\"\" [$__auto]) by (namespace)"
+        }
+      ]
+    },
+    {
+      "id": 32,
+      "type": "timeseries",
+      "title": "Average latency by tenant",
+      "datasource": { "type": "loki", "uid": "${ds}" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 33 },
+      "fieldConfig": { "defaults": { "unit": "s", "min": 0 }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{namespace}}",
+          "expr": "avg_over_time({namespace=~\"$namespace\", app=~\"$app\"} | json | status=~\"[0-9]{3}\" | unwrap request_time | __error__=\"\" [$__auto]) by (namespace)"
+        }
+      ]
+    },
+    {
+      "id": 33,
+      "type": "logs",
+      "title": "Slow requests (> 1s)",
+      "datasource": { "type": "loki", "uid": "${ds}" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 41 },
+      "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true },
+      "targets": [
+        { "refId": "A", "expr": "{namespace=~\"$namespace\", app=~\"$app\"} | json | status=~\"[0-9]{3}\" | request_time > 1" }
+      ]
+    },
+    {
+      "id": 40,
+      "type": "row",
+      "title": "Saturation - how close the services are to their limits (from logs)",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 49 },
+      "collapsed": false
+    },
+    {
+      "id": 41,
+      "type": "timeseries",
+      "title": "Throttled / unavailable responses/s (429, 503)",
+      "datasource": { "type": "loki", "uid": "${ds}" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 50 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 15 } }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{namespace}}",
+          "expr": "sum by (namespace) (rate({namespace=~\"$namespace\", app=~\"$app\"} | json | status=~\"429|503\" [$__auto]))"
+        }
+      ]
+    },
+    {
+      "id": 42,
+      "type": "timeseries",
+      "title": "Slow request share (> 1s, %)",
+      "datasource": { "type": "loki", "uid": "${ds}" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 50 },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{namespace}}",
+          "expr": "100 * sum by (namespace) (rate({namespace=~\"$namespace\", app=~\"$app\"} | json | status=~\"[0-9]{3}\" | request_time > 1 [$__auto])) / sum by (namespace) (rate({namespace=~\"$namespace\", app=~\"$app\"} | json | status=~\"[0-9]{3}\" [$__auto]))"
+        }
+      ]
+    },
+    {
+      "id": 43,
+      "type": "timeseries",
+      "title": "Log throughput (lines/s) by tenant",
+      "datasource": { "type": "loki", "uid": "${ds}" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 50 },
+      "fieldConfig": { "defaults": { "unit": "logs/s", "custom": { "fillOpacity": 15, "stacking": { "mode": "normal" } } }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{namespace}}",
+          "expr": "sum by (namespace) (rate({namespace=~\"$namespace\"} [$__auto]))"
+        }
+      ]
+    },
+    {
+      "id": 44,
+      "type": "logs",
+      "title": "Resource pressure messages",
+      "datasource": { "type": "loki", "uid": "${ds}" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 58 },
+      "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true },
+      "targets": [
+        { "refId": "A", "expr": "{namespace=~\"$namespace\"} |~ \"(?i)(too many open|worker_connections|queue full|overload|resource exhausted|out of memory|oomkilled|no space left|throttl)\"" }
+      ]
+    },
+    {
+      "id": 50,
+      "type": "row",
+      "title": "All logs",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 66 },
+      "collapsed": false
+    },
+    {
+      "id": 51,
+      "type": "logs",
+      "title": "Logs (filter with the search box above)",
+      "datasource": { "type": "loki", "uid": "${ds}" },
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 67 },
+      "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true },
+      "targets": [
+        { "refId": "A", "expr": "{namespace=~\"$namespace\", app=~\"$app\"} |~ \"(?i)$search\"" }
+      ]
+    }
+  ]
+}

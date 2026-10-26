@@ -145,7 +145,10 @@ grafana:
     users:
       allow_sign_up: false
       allow_org_create: false
-      auto_assign_org: false
+      # Single shared org: new members join org 1 as Viewer; the reconciler sets their real role.
+      auto_assign_org: true
+      auto_assign_org_id: 1
+      auto_assign_org_role: Viewer
     auth.anonymous:
       enabled: false
     analytics:

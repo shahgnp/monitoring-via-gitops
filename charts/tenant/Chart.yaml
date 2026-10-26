@@ -1,6 +1,6 @@
 apiVersion: v2
 name: tenant
-description: "Onboards one tenant: namespace, network isolation, metrics proxy, alerting and the Grafana registry entry"
+description: "Onboards one tenant: namespace, network isolation, alerting and the Grafana members registry entry"
 type: application
 version: 0.1.0
 appVersion: "1.0"

@@ -17,7 +17,7 @@ loki:
           period: 24h
   limits_config:
     retention_period: 168h
-    allow_structured_metadata: true
+    allow_structured_metadata: 
     volume_enabled: true
   compactor:
     retention_enabled: true

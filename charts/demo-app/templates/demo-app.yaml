@@ -6,9 +6,13 @@ metadata:
   namespace: {{ $ns }}
 data:
   default.conf: |
+    # Structured access log: the golden-signals dashboard parses status and request_time from it.
+    log_format sre escape=json '{"ts":"$time_iso8601","method":"$request_method","uri":"$uri","status":$status,"request_time":$request_time,"bytes_sent":$body_bytes_sent}';
     server {
       listen 8080;
+      access_log /dev/stdout sre;
       location = /stub_status {
+        access_log off;
         stub_status;
         allow 127.0.0.1;
         deny all;
@@ -16,7 +20,15 @@ data:
       location = /error {
         return 500 "simulated error from {{ .Values.tenant }}\n";
       }
+      location = /unavailable {
+        return 503 "simulated overload from {{ .Values.tenant }}\n";
+      }
+      location = /payload {
+        default_type text/plain;
+        return 200 "{{ repeat 300 "0123456789" }}\n";
+      }
       location = /health {
+        access_log off;
         return 200 "ok\n";
       }
       location / {
@@ -176,9 +188,13 @@ spec:
             - |
               i=0
               while true; do
-                curl -s -o /dev/null http://demo-app:8080/
                 i=$((i+1))
-                if [ $((i % 5)) -eq 0 ]; then curl -s -o /dev/null http://demo-app:8080/error; fi
+                curl -s -o /dev/null http://demo-app:8080/
+                if [ $((i % 4)) -eq 0 ]; then curl -s -o /dev/null http://demo-app:8080/payload; fi
+                if [ $((i % {{ .Values.traffic.errorEvery }})) -eq 0 ]; then curl -s -o /dev/null http://demo-app:8080/error; fi
+                if [ $((i % {{ .Values.traffic.unavailableEvery }})) -eq 0 ]; then curl -s -o /dev/null http://demo-app:8080/unavailable; fi
+                # A throttled client makes the server-side request_time grow (latency/saturation signal).
+                if [ $((i % {{ .Values.traffic.slowEvery }})) -eq 0 ]; then curl -s -o /dev/null --limit-rate 1k http://demo-app:8080/payload; fi
                 sleep {{ .Values.trafficIntervalSeconds }}
               done
           resources:

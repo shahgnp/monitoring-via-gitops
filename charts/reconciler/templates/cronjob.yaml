@@ -13,8 +13,8 @@ metadata:
   name: grafana-reconciler-dashboards
   namespace: {{ .Values.namespace }}
 data:
-  tenant-overview.json: |-
-    {{- .Files.Get "files/tenant-overview.json" | nindent 4 }}
+  golden-signals-logs.json: |-
+    {{- .Files.Get "files/golden-signals-logs.json" | nindent 4 }}
 ---
 apiVersion: batch/v1
 kind: CronJob

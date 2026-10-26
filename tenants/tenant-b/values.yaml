@@ -1,8 +1,18 @@
-# Demo tenant. The directory name must equal the namespace; Grafana sees only this namespace.
+# Demo tenant. The directory name must equal the namespace.
 tenant: tenant-b
 namespace: tenant-b
-grafana:
-  login: tenant-b
-  email: tenant-b@poc.local
-  # PoC credential in plaintext (no secret management in this setup).
-  password: TenantB-Poc-2026
+# Grafana members of the shared org. role: Viewer | Editor | Admin.
+# Team members can open the tenant folder; Editors can also edit it. PoC passwords in plaintext.
+members:
+  - login: tenant-b
+    email: tenant-b@poc.local
+    password: TenantB-Poc-2026
+    role: Viewer
+  - login: tenant-b-editor
+    email: tenant-b-editor@poc.local
+    password: TenantB-Editor-2026
+    role: Editor
+# Synthetic load: one error / one slow request every N requests (noisier than tenant-a).
+traffic:
+  errorEvery: 3
+  slowEvery: 4
