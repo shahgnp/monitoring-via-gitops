@@ -1,7 +1,7 @@
 # Demo tenant. The directory name must equal its first namespace (the demo workload deploys there).
 tenant: tenant-a
-# One tenant can span several namespaces; its dashboards get a namespace filter.
-namespaces: [tenant-a, tenant-a-jobs]
+# A tenant can list several namespaces, e.g. [tenant-a, tenant-a-jobs]; its dashboards then get a namespace filter.
+namespaces: [tenant-a]
 manageNamespace: true
 networkPolicy:
   enabled: true

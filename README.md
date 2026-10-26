@@ -96,7 +96,7 @@ All accounts live in one shared Grafana org (`Monitoring`).
 
 ### Add a tenant or a member
 
-Create `tenants/<name>/values.yaml` (copy `tenants/tenant-a/values.yaml`; the directory name must equal the namespace) and push. The ApplicationSets create the namespace, alerting, the Grafana team, folder, members, dashboards and the demo workload. To add a login to an existing tenant, append to its `members:` list.
+Create `tenants/<name>/values.yaml` (copy `tenants/tenant-a/values.yaml`; the directory name must equal the tenant's first namespace) and push. The ApplicationSets create the namespaces, alerting, the Grafana team, folder, members, dashboards and the demo workload. A tenant can list several namespaces (`namespaces: [a, b]`): its dashboards then query all of them and show a namespace filter. To add a login to an existing tenant, append to its `members:` list; the same login may be listed under several tenants.
 Removing a tenant directory removes its Kubernetes resources, but its Grafana team, folder and dashboards are not deleted automatically.
 
 ## Verify
