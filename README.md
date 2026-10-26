@@ -9,7 +9,7 @@ RKE2 (CIS profile) on AWS plus a GitOps-managed, multi-tenant monitoring stack d
 | Cloud integration | aws-cloud-controller-manager (Service type `LoadBalancer` creates an NLB) |
 | GitOps | ArgoCD installed on the new cluster, app-of-apps from `apps/` |
 | Platform | cert-manager (self-signed CA), Longhorn, Istio (gateway), kube-prometheus-stack (Prometheus, Alertmanager, Grafana), Loki, Alloy |
-| Tenancy | Grafana org per tenant, `prom-label-proxy` per tenant, Loki tenant = namespace, reconciler CronJob |
+| Tenancy | One shared Grafana org; members with Viewer/Editor/Admin roles, a team and a folder per tenant, Loki tenant = namespace, reconciler CronJob |
 | Demo tenants | `tenant-a`, `tenant-b` |
 
 ## Layout
@@ -62,25 +62,44 @@ dig +short "$LB"                                               # add one of the 
 
 Open `https://grafana.poc.local` (accept the self-signed certificate warning).
 
-| User | Password | Sees |
-|---|---|---|
-| `admin` | `Adm1n-Poc-2026` | everything (org 1: all Prometheus data, `Loki (all namespaces)`) |
-| `tenant-a` | `TenantA-Poc-2026` | only namespace `tenant-a` |
-| `tenant-b` | `TenantB-Poc-2026` | only namespace `tenant-b` |
+| User | Password | Org role | Sees |
+|---|---|---|---|
+| `admin` | `Adm1n-Poc-2026` | Admin | everything, including the `Platform (admins only)` folder |
+| `tenant-a` | `TenantA-Poc-2026` | Viewer | `SRE - all tenants` and the `tenant-a` folder |
+| `tenant-a-editor` | `TenantA-Editor-2026` | Editor | same, and can edit the `tenant-a` folder |
+| `tenant-b` | `TenantB-Poc-2026` | Viewer | `SRE - all tenants` and the `tenant-b` folder |
+| `tenant-b-editor` | `TenantB-Editor-2026` | Editor | same, and can edit the `tenant-b` folder |
 
 These are plaintext PoC credentials (no secret management). Change them in `platform/monitoring/kps-values.yaml` and `tenants/*/values.yaml`.
 
-## How tenancy works
+## Dashboards: the four golden signals from logs
 
-- Metrics: each tenant's Grafana datasource points at its own `prom-label-proxy`, which forces `namespace=<tenant namespace>` on every query. Prometheus, Alertmanager and Loki are only reachable from the `monitoring` namespace (NetworkPolicies in `platform/monitoring-extras`).
-- Logs: Alloy sets the Loki tenant to the pod's namespace. A tenant's Grafana datasource sends `X-Scope-OrgID=<namespace>`; tenant users cannot edit datasources (Viewer role).
-- Grafana: the `grafana-reconciler` CronJob (every 2 minutes) creates the org, the Viewer-only user and datasources from the `tenant-*` Secrets in `monitoring`, imports the tenant dashboard, and keeps the admin `Loki (all namespaces)` datasource current.
+`SRE - all tenants / Golden signals (logs) - all tenants` is the home dashboard. It uses the `Loki (all namespaces)` datasource with a tenant (namespace) and application selector, and is built from the demo nginx JSON access log (`status`, `request_time`):
+
+| Signal | Panels |
+|---|---|
+| Traffic | requests/s by tenant and by status class |
+| Errors | 5xx/s, error ratio, availability against a 99.5% SLO, recent 5xx lines |
+| Latency | p50/p95/p99 and average by tenant, slow requests (> 1s) |
+| Saturation | 429/503 responses, share of slow requests, log throughput, resource-pressure messages |
+
+Every tenant also gets the same dashboard pre-filtered to its namespace in its own folder. The dashboard is a Grafana JSON document (`charts/reconciler/files/golden-signals-logs.json`; Grafana has no XML dashboard format) and is imported by the reconciler. Other applications need a JSON access log with `status` and `request_time` to light up the HTTP panels.
+
+## How privileges work
+
+All accounts live in one shared Grafana org (`Monitoring`). Privileges are controlled with member accounts:
+
+- Org role per member: `Viewer`, `Editor` or `Admin`.
+- One team and one folder per tenant. The team can view the folder; members with the `Editor` role can also edit it. The `SRE - all tenants` folder is visible to every member, and the built-in infrastructure dashboards are in `Platform (admins only)`.
+- Members are defined in `tenants/<name>/values.yaml` (`members:` list) and created by the `grafana-reconciler` CronJob (every 2 minutes). Accounts created by hand in the Grafana UI (Administration > Users) are left alone, so an admin can also add members there.
 - Alerting: each tenant gets an `AlertmanagerConfig`; the operator adds a namespace matcher so routes only match that tenant's alerts.
 
-### Add a tenant
+**Limitation:** Grafana OSS cannot restrict datasource access per user. In the shared org every member can query the shared Loki and Prometheus datasources (for example in Explore), so folders and roles limit dashboards and edit rights, not data. Hard per-tenant data isolation needs one org per tenant (the previous design) or an identity-aware proxy.
 
-Create `tenants/<name>/values.yaml` (copy `tenants/tenant-a/values.yaml`; the directory name must equal the namespace) and push. The ApplicationSets create the namespace, proxy, alerting, Grafana org/user and the demo workload.
-Removing a tenant directory removes its Kubernetes resources, but the Grafana org and user are not deleted automatically.
+### Add a tenant or a member
+
+Create `tenants/<name>/values.yaml` (copy `tenants/tenant-a/values.yaml`; the directory name must equal the namespace) and push. The ApplicationSets create the namespace, alerting, the Grafana team, folder, members and the demo workload. To add a member to an existing tenant, append to its `members:` list.
+Removing a tenant or member from Git does not delete the Grafana team, folder or user.
 
 ## Verify
 
@@ -92,7 +111,7 @@ kubectl -n monitoring create job --from=cronjob/grafana-reconciler reconcile-now
 kubectl -n monitoring logs job/reconcile-now
 ```
 
-In Grafana: as `tenant-a`, the home dashboard shows `tenant-a` metrics and logs only; querying `{namespace="tenant-b"}` or `up{namespace="tenant-b"}` returns nothing. As `admin`, Explore with `Loki (all namespaces)` shows all namespaces.
+In Grafana: log in as `tenant-a`; the home dashboard shows the golden signals for all tenants and the `tenant-a` folder holds the same dashboard filtered to `tenant-a`. `tenant-a` cannot see the `tenant-b` folder or `Platform (admins only)`; `tenant-a-editor` can edit the `tenant-a` folder but `tenant-a` (Viewer) cannot.
 
 Prometheus targets (admin): kubelet, apiserver, etcd, kube-controller-manager, kube-scheduler, kube-proxy, coredns, Longhorn, Istio, demo apps.
 
