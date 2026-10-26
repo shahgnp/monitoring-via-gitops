@@ -2,6 +2,6 @@
 tenant: ""
 # One namespace per tenant; it must equal the tenants/<name> directory name.
 namespace: ""
-# Grafana members of this tenant. role: Viewer | Editor | Admin (org-wide role in the shared org).
+# Grafana members of this tenant; they are always read-only Viewers. Each needs login, password and optionally email.
 members: []
 monitoringNamespace: monitoring

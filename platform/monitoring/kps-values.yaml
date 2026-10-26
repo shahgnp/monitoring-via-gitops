@@ -154,6 +154,11 @@ grafana:
     analytics:
       reporting_enabled: false
       check_for_updates: false
+    # Viewers could otherwise browse every namespace's alerts; tenant alerting goes through Alertmanager instead.
+    unified_alerting:
+      enabled: false
+    alerting:
+      enabled: false
   sidecar:
     dashboards:
       enabled: true
@@ -169,3 +174,5 @@ grafana:
       enabled: true
       defaultDatasourceEnabled: true
       isDefaultDatasource: true
+      alertmanager:
+        enabled: false

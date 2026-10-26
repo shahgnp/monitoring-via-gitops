@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Idempotently reconciles Grafana (single org) with the tenant registry Secrets (label monitoring.poc/tenant=true):
-# members with org roles, one team and one folder per tenant, and the golden-signals dashboards.
+# Idempotently reconciles Grafana (single org) with the tenant registry Secrets (label monitoring.poc/tenant=true).
+# Tenants are read-only Viewers; they only see the folder of their team, whose dashboards have the namespace baked in.
 set -uo pipefail
 
 GRAFANA_URL="${GRAFANA_URL:?}"
@@ -8,8 +8,9 @@ LOKI_URL="${LOKI_URL:?}"
 GF_USER="${GF_USER:?}"
 GF_PASS="${GF_PASS:?}"
 NS="${POD_NAMESPACE:-monitoring}"
-DASHBOARD=/dashboards/golden-signals-logs.json
+DASH_DIR=/dashboards
 SRE_FOLDER=sre-all-tenants
+PLATFORM_FOLDER_TITLE="Platform (admins only)"
 TMP=/tmp/reconcile
 mkdir -p "$TMP"
 
@@ -32,6 +33,12 @@ wait_for_grafana() {
   done
   log "Grafana is not reachable"
   return 1
+}
+
+loki_datasource_body() {
+  local uid=$1 name=$2 tenant_header=$3
+  jq -n --arg u "$LOKI_URL" --arg id "$uid" --arg n "$name" --arg v "$tenant_header" \
+    '{name:$n,uid:$id,type:"loki",access:"proxy",url:$u,jsonData:{httpHeaderName1:"X-Scope-OrgID"},secureJsonData:{httpHeaderValue1:$v}}'
 }
 
 upsert_datasource() {
@@ -66,11 +73,17 @@ import_dashboard() {
   [[ $CODE == 200 ]] || log "dashboard import into $folder failed ($CODE) $OUT"
 }
 
+# render_dashboard FILE UID TITLE NAMESPACE LOKI_UID: bakes the namespace and datasources into a dashboard template.
+render_dashboard() {
+  local file=$1 uid=$2 title=$3 ns=$4 loki=$5
+  sed -e "s/__NAMESPACE__/$ns/g" -e "s/__LOKI_UID__/$loki/g" -e "s/__PROM_UID__/prometheus/g" "$file" \
+    | jq --arg u "$uid" --arg t "$title" '.uid=$u | .title=$t'
+}
+
 ensure_team() {
-  local name=$1
+  local name=$1 id
   gf GET "/api/teams/search?name=$(jq -rn --arg n "$name" '$n|@uri')"
   if [[ $CODE == 200 ]]; then
-    local id
     id=$(jq -r --arg n "$name" '.teams[] | select(.name==$n) | .id' <<<"$OUT" | head -n1)
     [[ -n "$id" ]] && { echo "$id"; return 0; }
   fi
@@ -85,6 +98,23 @@ ensure_team_member() {
   if jq -e --argjson u "$uid" 'any(.[]; .userId==$u)' <<<"$OUT" >/dev/null 2>&1; then return 0; fi
   gf POST "/api/teams/$team/members" "$(jq -n --argjson u "$uid" '{userId:$u}')"
   [[ $CODE == 200 ]] || log "team $team: add member $uid failed ($CODE) $OUT"
+}
+
+# Members that are no longer listed in Git lose their access: removed from the team and deleted unless they are admins.
+prune_team_members() {
+  local team=$1 keep=$2 admin_id=$3 uid login
+  gf GET "/api/teams/$team/members"
+  while IFS=$'\t' read -r uid login; do
+    [[ -n "$uid" && "$uid" != "$admin_id" ]] || continue
+    jq -e --argjson u "$uid" 'index($u)' <<<"$keep" >/dev/null 2>&1 && continue
+    gf DELETE "/api/teams/$team/members/$uid"
+    gf GET "/api/users/$uid"
+    if [[ "$(jq -r .isGrafanaAdmin <<<"$OUT")" == "true" ]]; then continue; fi
+    gf GET "/api/users/$uid/orgs"
+    if [[ "$(jq -r '[.[] | select(.orgId==1) | .role][0] // ""' <<<"$OUT")" == "Admin" ]]; then continue; fi
+    gf DELETE "/api/admin/users/$uid"
+    log "removed member $login (no longer in Git)"
+  done < <(jq -r '.[] | "\(.userId)\t\(.login)"' <<<"$OUT")
 }
 
 ensure_user() {
@@ -106,64 +136,57 @@ ensure_user() {
   echo "$uid"
 }
 
-# Puts the user in org 1 with the requested role and makes it their current org.
-ensure_org_role() {
-  local uid=$1 login=$2 role=$3 current
+# Tenant members are always read-only Viewers of org 1.
+ensure_viewer() {
+  local uid=$1 login=$2 current
   gf GET "/api/users/$uid/orgs"
   current=$(jq -r '.[] | select(.orgId==1) | .role' <<<"$OUT")
   if [[ -z "$current" ]]; then
-    gf POST /api/orgs/1/users "$(jq -n --arg l "$login" --arg r "$role" '{loginOrEmail:$l,role:$r}')"
+    gf POST /api/orgs/1/users "$(jq -n --arg l "$login" '{loginOrEmail:$l,role:"Viewer"}')"
     [[ $CODE == 200 ]] || log "user $login: add to org failed ($CODE) $OUT"
-  elif [[ "$current" != "$role" ]]; then
-    gf PATCH "/api/orgs/1/users/$uid" "$(jq -n --arg r "$role" '{role:$r}')"
+  elif [[ "$current" != "Viewer" ]]; then
+    gf PATCH "/api/orgs/1/users/$uid" '{"role":"Viewer"}'
     [[ $CODE == 200 ]] || log "user $login: role change failed ($CODE) $OUT"
   fi
   gf POST "/api/users/$uid/using/1"
-}
-
-# Earlier versions used one org per tenant; drop it once members have moved to org 1.
-drop_legacy_org() {
-  local name=$1 id
-  gf GET "/api/orgs/name/$(jq -rn --arg n "$name" '$n|@uri')"
-  [[ $CODE == 200 ]] || return 0
-  id=$(jq -r .id <<<"$OUT")
-  [[ "$id" != 1 ]] || return 0
-  gf DELETE "/api/orgs/$id"
-  log "removed legacy org $name"
 }
 
 # The kube-prometheus-stack dashboards are provisioned into this folder; empty permissions leave it to org admins.
 restrict_platform_folder() {
   local uid
   gf GET /api/folders
-  uid=$(jq -r '.[] | select(.title=="Platform (admins only)") | .uid' <<<"$OUT" | head -n1)
+  uid=$(jq -r --arg t "$PLATFORM_FOLDER_TITLE" '.[] | select(.title==$t) | .uid' <<<"$OUT" | head -n1)
   [[ -n "$uid" ]] || { log "platform folder not provisioned yet"; return 0; }
   set_folder_permissions "$uid" '[]'
 }
 
 reconcile_shared() {
-  upsert_datasource loki-all "$(jq -n --arg u "$LOKI_URL" --arg v "$1" \
-    '{name:"Loki (all namespaces)",uid:"loki-all",type:"loki",access:"proxy",url:$u,jsonData:{httpHeaderName1:"X-Scope-OrgID"},secureJsonData:{httpHeaderValue1:$v}}')"
+  local all=$1
+  upsert_datasource loki-all "$(loki_datasource_body loki-all "Loki (all namespaces)" "$all")"
 
   restrict_platform_folder
   gf PUT /api/orgs/1 '{"name":"Monitoring"}'
-  ensure_folder "$SRE_FOLDER" "SRE - all tenants" || return 1
-  set_folder_permissions "$SRE_FOLDER" '[{"role":"Viewer","permission":1},{"role":"Editor","permission":1}]'
-  import_dashboard "$SRE_FOLDER" "$(cat "$DASHBOARD")"
+
+  # The all-tenants dashboard shows every namespace, so it is for admins only.
+  ensure_folder "$SRE_FOLDER" "SRE - all tenants (admins only)" || return 1
+  set_folder_permissions "$SRE_FOLDER" '[]'
+  import_dashboard "$SRE_FOLDER" "$(cat "$DASH_DIR/golden-signals-logs.json")"
   gf PUT /api/org/preferences '{"homeDashboardUID":"golden-signals-all"}'
 }
 
 reconcile_tenant() {
-  local tenant=$1 namespace=$2 members=$3
-  local team folder items row login email pass role uid dash
+  local tenant=$1 namespace=$2 members=$3 admin_id=$4
+  local team folder keep='[]' row login email pass role uid loki="loki-$tenant"
   log "tenant $tenant (namespace $namespace)"
 
   team=$(ensure_team "$tenant") || return 1
   folder="tenant-$tenant"
   ensure_folder "$folder" "$tenant" || return 1
+  # Grafana adds the creator to the team; admins use the org home page instead of a tenant home.
+  gf DELETE "/api/teams/$team/members/$admin_id"
 
-  # Team members view the folder; individual Editors may edit it.
-  items=$(jq -n --argjson t "$team" '[{teamId:$t,permission:1}]')
+  # Logs go through a datasource that sends only this tenant's Loki header.
+  upsert_datasource "$loki" "$(loki_datasource_body "$loki" "Loki ($tenant)" "$namespace")"
 
   while read -r row; do
     [[ -n "$row" ]] || continue
@@ -171,31 +194,33 @@ reconcile_tenant() {
     email=$(jq -r --arg d "$login@poc.local" '.email // $d' <<<"$row")
     pass=$(jq -r .password <<<"$row")
     role=$(jq -r '.role // "Viewer"' <<<"$row")
-    case "$role" in Viewer|Editor|Admin) ;; *) log "member $login: invalid role $role"; continue ;; esac
+    [[ "$role" == "Viewer" ]] || log "member $login: role $role is not allowed for tenants, using Viewer"
 
     uid=$(ensure_user "$login" "$email" "$pass") || continue
-    ensure_org_role "$uid" "$login" "$role"
+    ensure_viewer "$uid" "$login"
     ensure_team_member "$team" "$uid"
-    if [[ "$role" == "Editor" ]]; then
-      items=$(jq --argjson u "$uid" '. + [{userId:$u,permission:2}]' <<<"$items")
-    fi
+    keep=$(jq --argjson u "$uid" '. + [$u]' <<<"$keep")
   done < <(jq -c '.[]' <<<"$members")
 
-  set_folder_permissions "$folder" "$items"
+  prune_team_members "$team" "$keep" "$admin_id"
 
-  dash=$(jq --arg t "$tenant" --arg ns "$namespace" '
-      .uid = "golden-signals-" + $t
-      | .title = $t + " - golden signals (logs)"
-      | (.templating.list[] | select(.name=="namespace")).current = {text:[$ns],value:[$ns]}
-      | (.templating.list[] | select(.name=="namespace")).includeAll = false' "$DASHBOARD")
-  import_dashboard "$folder" "$dash"
+  # Only the team (read-only) can open the tenant folder.
+  set_folder_permissions "$folder" "$(jq -n --argjson t "$team" '[{teamId:$t,permission:1}]')"
 
-  drop_legacy_org "$tenant"
+  import_dashboard "$folder" "$(render_dashboard "$DASH_DIR/tenant-overview.json" "overview-$tenant" "Overview - metrics" "$namespace" "$loki")"
+  import_dashboard "$folder" "$(render_dashboard "$DASH_DIR/tenant-logs.json" "logs-$tenant" "Logs and golden signals" "$namespace" "$loki")"
+  gf PUT "/api/teams/$team/preferences" "$(jq -n --arg u "overview-$tenant" '{homeDashboardUID:$u}')"
+
+  # Dashboards from the earlier shared-filter design.
+  gf DELETE "/api/dashboards/uid/golden-signals-$tenant"
 }
 
 main() {
-  local failed=0 row all
+  local failed=0 row all admin_id
   wait_for_grafana || exit 1
+
+  gf GET /api/user
+  admin_id=$(jq -r .id <<<"$OUT")
 
   # The admin sees logs of every namespace through Loki's multi-tenant query syntax.
   all=$(kubectl get ns -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | paste -sd'|' -)
@@ -204,7 +229,7 @@ main() {
 
   while read -r row; do
     [[ -n "$row" ]] || continue
-    reconcile_tenant "$(jq -r .tenant <<<"$row")" "$(jq -r .namespace <<<"$row")" "$(jq -r .members <<<"$row")" || failed=1
+    reconcile_tenant "$(jq -r .tenant <<<"$row")" "$(jq -r .namespace <<<"$row")" "$(jq -r .members <<<"$row")" "$admin_id" || failed=1
   done < <(kubectl -n "$NS" get secrets -l monitoring.poc/tenant=true -o json | jq -c '.items[] | .data | map_values(@base64d)')
 
   exit "$failed"

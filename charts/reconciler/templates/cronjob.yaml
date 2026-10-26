@@ -15,6 +15,10 @@ metadata:
 data:
   golden-signals-logs.json: |-
     {{- .Files.Get "files/golden-signals-logs.json" | nindent 4 }}
+  tenant-overview.json: |-
+    {{- .Files.Get "files/tenant-overview.json" | nindent 4 }}
+  tenant-logs.json: |-
+    {{- .Files.Get "files/tenant-logs.json" | nindent 4 }}
 ---
 apiVersion: batch/v1
 kind: CronJob

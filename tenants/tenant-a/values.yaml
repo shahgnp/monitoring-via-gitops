@@ -1,17 +1,15 @@
 # Demo tenant. The directory name must equal the namespace.
 tenant: tenant-a
 namespace: tenant-a
-# Grafana members of the shared org. role: Viewer | Editor | Admin.
-# Team members can open the tenant folder; Editors can also edit it. PoC passwords in plaintext.
+# Grafana members: read-only Viewers of the shared org who only see this tenant's folder.
+# Add a login to give someone access; remove it to revoke (the account is deleted). PoC passwords in plaintext.
 members:
   - login: tenant-a
     email: tenant-a@poc.local
     password: TenantA-Poc-2026
-    role: Viewer
-  - login: tenant-a-editor
-    email: tenant-a-editor@poc.local
-    password: TenantA-Editor-2026
-    role: Editor
+  - login: tenant-a-viewer2
+    email: tenant-a-viewer2@poc.local
+    password: TenantA-Viewer2-2026
 # Synthetic load: one error / one slow request every N requests.
 traffic:
   errorEvery: 5

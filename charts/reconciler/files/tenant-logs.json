@@ -1,0 +1,408 @@
+{
+  "uid": "logs",
+  "title": "Logs and golden signals",
+  "tags": ["tenant", "logs", "golden-signals"],
+  "timezone": "browser",
+  "editable": false,
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "1m",
+  "time": { "from": "now-1h", "to": "now" },
+  "description": "Latency, traffic, errors and saturation for this namespace, derived from structured access logs, plus a searchable log view.",
+  "templating": {
+    "list": [
+      {
+        "name": "app",
+        "label": "Application",
+        "type": "query",
+        "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+        "definition": "label_values({namespace=\"__NAMESPACE__\"}, app)",
+        "query": { "label": "app", "refId": "LokiVariableQueryEditor-VariableQuery", "stream": "{namespace=\"__NAMESPACE__\"}", "type": 1 },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": { "text": ["All"], "value": ["$__all"] }
+      },
+      {
+        "name": "pod",
+        "label": "Pod",
+        "type": "query",
+        "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+        "definition": "label_values({namespace=\"__NAMESPACE__\", app=~\"$app\"}, pod)",
+        "query": { "label": "pod", "refId": "LokiVariableQueryEditor-VariableQuery", "stream": "{namespace=\"__NAMESPACE__\", app=~\"$app\"}", "type": 1 },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": { "text": ["All"], "value": ["$__all"] }
+      },
+      {
+        "name": "container",
+        "label": "Container",
+        "type": "query",
+        "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+        "definition": "label_values({namespace=\"__NAMESPACE__\", pod=~\"$pod\"}, container)",
+        "query": { "label": "container", "refId": "LokiVariableQueryEditor-VariableQuery", "stream": "{namespace=\"__NAMESPACE__\", pod=~\"$pod\"}", "type": 1 },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": { "text": ["All"], "value": ["$__all"] }
+      },
+      {
+        "name": "statusclass",
+        "label": "HTTP status (log view)",
+        "type": "custom",
+        "query": "All : .*,2xx : 2..,3xx : 3..,4xx : 4..,5xx : 5..",
+        "multi": false,
+        "includeAll": false,
+        "current": { "text": "All", "value": ".*" },
+        "options": [
+          { "text": "All", "value": ".*", "selected": true },
+          { "text": "2xx", "value": "2..", "selected": false },
+          { "text": "3xx", "value": "3..", "selected": false },
+          { "text": "4xx", "value": "4..", "selected": false },
+          { "text": "5xx", "value": "5..", "selected": false }
+        ]
+      },
+      {
+        "name": "search",
+        "label": "Keyword / regex",
+        "type": "textbox",
+        "query": "",
+        "current": { "text": "", "value": "" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Service level overview (SLO target 99.5% availability)",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Availability (non-5xx)",
+      "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 1 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 3,
+          "min": 0,
+          "max": 100,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "orange", "value": 99 }, { "color": "green", "value": 99.5 }] }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "instant",
+          "expr": "100 * (1 - (sum(count_over_time({namespace=\"__NAMESPACE__\", app=~\"$app\", pod=~\"$pod\", container=~\"$container\"} | json | status=~\"5[0-9]{2}\" [$__range])) or vector(0)) / sum(count_over_time({namespace=\"__NAMESPACE__\", app=~\"$app\", pod=~\"$pod\", container=~\"$container\"} | json | status=~\"[0-9]{3}\" [$__range])))"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Traffic (requests/s)",
+      "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 1 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "decimals": 2 }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "none" },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "instant",
+          "expr": "sum(rate({namespace=\"__NAMESPACE__\", app=~\"$app\", pod=~\"$pod\", container=~\"$container\"} | json | status=~\"[0-9]{3}\" [$__range]))"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Error ratio (5xx)",
+      "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 1 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 0.5 }, { "color": "red", "value": 1 }] }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "instant",
+          "expr": "100 * (sum(count_over_time({namespace=\"__NAMESPACE__\", app=~\"$app\", pod=~\"$pod\", container=~\"$container\"} | json | status=~\"5[0-9]{2}\" [$__range])) or vector(0)) / sum(count_over_time({namespace=\"__NAMESPACE__\", app=~\"$app\", pod=~\"$pod\", container=~\"$container\"} | json | status=~\"[0-9]{3}\" [$__range]))"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "p95 latency (slowest pod)",
+      "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 1 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 3,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 0.5 }, { "color": "red", "value": 1 }] }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "instant",
+          "expr": "max(quantile_over_time(0.95, {namespace=\"__NAMESPACE__\", app=~\"$app\", pod=~\"$pod\", container=~\"$container\"} | json | status=~\"[0-9]{3}\" | unwrap request_time | __error__=\"\" [$__range]) by (pod))"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "row",
+      "title": "Traffic - how much demand the service receives",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 },
+      "collapsed": false
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Requests/s by pod",
+      "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 7 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 15, "stacking": { "mode": "normal" } } }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{pod}}",
+          "expr": "sum by (pod) (rate({namespace=\"__NAMESPACE__\", app=~\"$app\", pod=~\"$pod\", container=~\"$container\"} | json | status=~\"[0-9]{3}\" [$__auto]))"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Requests/s by status class",
+      "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 7 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 15, "stacking": { "mode": "normal" } } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "legendFormat": "2xx", "expr": "sum(rate({namespace=\"__NAMESPACE__\", app=~\"$app\", pod=~\"$pod\", container=~\"$container\"} | json | status=~\"2[0-9]{2}\" [$__auto]))" },
+        { "refId": "B", "legendFormat": "3xx", "expr": "sum(rate({namespace=\"__NAMESPACE__\", app=~\"$app\", pod=~\"$pod\", container=~\"$container\"} | json | status=~\"3[0-9]{2}\" [$__auto]))" },
+        { "refId": "C", "legendFormat": "4xx", "expr": "sum(rate({namespace=\"__NAMESPACE__\", app=~\"$app\", pod=~\"$pod\", container=~\"$container\"} | json | status=~\"4[0-9]{2}\" [$__auto]))" },
+        { "refId": "D", "legendFormat": "5xx", "expr": "sum(rate({namespace=\"__NAMESPACE__\", app=~\"$app\", pod=~\"$pod\", container=~\"$container\"} | json | status=~\"5[0-9]{2}\" [$__auto]))" }
+      ]
+    },
+    {
+      "id": 20,
+      "type": "row",
+      "title": "Errors - rate of failing requests",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 15 },
+      "collapsed": false
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "5xx responses/s by pod",
+      "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "color": { "mode": "fixed", "fixedColor": "red" }, "custom": { "fillOpacity": 15 } }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{pod}}",
+          "expr": "sum by (pod) (rate({namespace=\"__NAMESPACE__\", app=~\"$app\", pod=~\"$pod\", container=~\"$container\"} | json | status=~\"5[0-9]{2}\" [$__auto]))"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "Error ratio by pod (%)",
+      "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "custom": { "thresholdsStyle": { "mode": "line" } },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 0.5 }] }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{pod}}",
+          "expr": "100 * sum by (pod) (rate({namespace=\"__NAMESPACE__\", app=~\"$app\", pod=~\"$pod\", container=~\"$container\"} | json | status=~\"5[0-9]{2}\" [$__auto])) / sum by (pod) (rate({namespace=\"__NAMESPACE__\", app=~\"$app\", pod=~\"$pod\", container=~\"$container\"} | json | status=~\"[0-9]{3}\" [$__auto]))"
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "type": "logs",
+      "title": "Recent 5xx log lines",
+      "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
+      "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true },
+      "targets": [
+        { "refId": "A", "expr": "{namespace=\"__NAMESPACE__\", app=~\"$app\", pod=~\"$pod\", container=~\"$container\"} | json | status=~\"5[0-9]{2}\"" }
+      ]
+    },
+    {
+      "id": 30,
+      "type": "row",
+      "title": "Latency - how long requests take (request_time in the access log)",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 32 },
+      "collapsed": false
+    },
+    {
+      "id": 31,
+      "type": "timeseries",
+      "title": "Latency percentiles",
+      "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+      "gridPos": { "h": 8, "w": 16, "x": 0, "y": 33 },
+      "fieldConfig": { "defaults": { "unit": "s", "min": 0 }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "p50 {{pod}}",
+          "expr": "quantile_over_time(0.50, {namespace=\"__NAMESPACE__\", app=~\"$app\", pod=~\"$pod\", container=~\"$container\"} | json | status=~\"[0-9]{3}\" | unwrap request_time | __error__=\"\" [$__auto]) by (pod)"
+        },
+        {
+          "refId": "B",
+          "legendFormat": "p95 {{pod}}",
+          "expr": "quantile_over_time(0.95, {namespace=\"__NAMESPACE__\", app=~\"$app\", pod=~\"$pod\", container=~\"$container\"} | json | status=~\"[0-9]{3}\" | unwrap request_time | __error__=\"\" [$__auto]) by (pod)"
+        },
+        {
+          "refId": "C",
+          "legendFormat": "p99 {{pod}}",
+          "expr": "quantile_over_time(0.99, {namespace=\"__NAMESPACE__\", app=~\"$app\", pod=~\"$pod\", container=~\"$container\"} | json | status=~\"[0-9]{3}\" | unwrap request_time | __error__=\"\" [$__auto]) by (pod)"
+        }
+      ]
+    },
+    {
+      "id": 32,
+      "type": "timeseries",
+      "title": "Average latency by pod",
+      "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 33 },
+      "fieldConfig": { "defaults": { "unit": "s", "min": 0 }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{pod}}",
+          "expr": "avg_over_time({namespace=\"__NAMESPACE__\", app=~\"$app\", pod=~\"$pod\", container=~\"$container\"} | json | status=~\"[0-9]{3}\" | unwrap request_time | __error__=\"\" [$__auto]) by (pod)"
+        }
+      ]
+    },
+    {
+      "id": 33,
+      "type": "logs",
+      "title": "Slow requests (> 1s)",
+      "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 41 },
+      "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true },
+      "targets": [
+        { "refId": "A", "expr": "{namespace=\"__NAMESPACE__\", app=~\"$app\", pod=~\"$pod\", container=~\"$container\"} | json | status=~\"[0-9]{3}\" | request_time > 1" }
+      ]
+    },
+    {
+      "id": 40,
+      "type": "row",
+      "title": "Saturation - how close the service is to its limits (from logs)",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 49 },
+      "collapsed": false
+    },
+    {
+      "id": 41,
+      "type": "timeseries",
+      "title": "Throttled / unavailable responses/s (429, 503)",
+      "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 50 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 15 } }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{pod}}",
+          "expr": "sum by (pod) (rate({namespace=\"__NAMESPACE__\", app=~\"$app\", pod=~\"$pod\", container=~\"$container\"} | json | status=~\"429|503\" [$__auto]))"
+        }
+      ]
+    },
+    {
+      "id": 42,
+      "type": "timeseries",
+      "title": "Slow request share (> 1s, %)",
+      "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 50 },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{pod}}",
+          "expr": "100 * sum by (pod) (rate({namespace=\"__NAMESPACE__\", app=~\"$app\", pod=~\"$pod\", container=~\"$container\"} | json | status=~\"[0-9]{3}\" | request_time > 1 [$__auto])) / sum by (pod) (rate({namespace=\"__NAMESPACE__\", app=~\"$app\", pod=~\"$pod\", container=~\"$container\"} | json | status=~\"[0-9]{3}\" [$__auto]))"
+        }
+      ]
+    },
+    {
+      "id": 43,
+      "type": "timeseries",
+      "title": "Log throughput (lines/s) by pod",
+      "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 50 },
+      "fieldConfig": { "defaults": { "unit": "logs/s", "custom": { "fillOpacity": 15, "stacking": { "mode": "normal" } } }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{pod}}",
+          "expr": "sum by (pod) (rate({namespace=\"__NAMESPACE__\", app=~\"$app\", pod=~\"$pod\", container=~\"$container\"} [$__auto]))"
+        }
+      ]
+    },
+    {
+      "id": 44,
+      "type": "logs",
+      "title": "Resource pressure messages",
+      "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 58 },
+      "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true },
+      "targets": [
+        { "refId": "A", "expr": "{namespace=\"__NAMESPACE__\", app=~\"$app\", pod=~\"$pod\", container=~\"$container\"} |~ \"(?i)(too many open|worker_connections|queue full|overload|resource exhausted|out of memory|oomkilled|no space left|throttl)\"" }
+      ]
+    },
+    {
+      "id": 50,
+      "type": "row",
+      "title": "Log view - use the time picker and the filters above (application, pod, container, status, keyword)",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 66 },
+      "collapsed": false
+    },
+    {
+      "id": 51,
+      "type": "logs",
+      "title": "Logs",
+      "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+      "gridPos": { "h": 14, "w": 24, "x": 0, "y": 67 },
+      "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true },
+      "targets": [
+        { "refId": "A", "expr": "{namespace=\"__NAMESPACE__\", app=~\"$app\", pod=~\"$pod\", container=~\"$container\"} |~ \"(?i)$search\" | json | status=~\"$statusclass\"" }
+      ]
+    }
+  ]
+}

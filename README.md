@@ -9,7 +9,7 @@ RKE2 (CIS profile) on AWS plus a GitOps-managed, multi-tenant monitoring stack d
 | Cloud integration | aws-cloud-controller-manager (Service type `LoadBalancer` creates an NLB) |
 | GitOps | ArgoCD installed on the new cluster, app-of-apps from `apps/` |
 | Platform | cert-manager (self-signed CA), Longhorn, Istio (gateway), kube-prometheus-stack (Prometheus, Alertmanager, Grafana), Loki, Alloy |
-| Tenancy | One shared Grafana org; members with Viewer/Editor/Admin roles, a team and a folder per tenant, Loki tenant = namespace, reconciler CronJob |
+| Tenancy | One shared Grafana org; tenants are read-only Viewers who only see their own folder (dashboards with the namespace baked in); Loki tenant = namespace; reconciler CronJob |
 | Demo tenants | `tenant-a`, `tenant-b` |
 
 ## Layout
@@ -64,42 +64,40 @@ Open `https://grafana.poc.local` (accept the self-signed certificate warning).
 
 | User | Password | Org role | Sees |
 |---|---|---|---|
-| `admin` | `Adm1n-Poc-2026` | Admin | everything, including the `Platform (admins only)` folder |
-| `tenant-a` | `TenantA-Poc-2026` | Viewer | `SRE - all tenants` and the `tenant-a` folder |
-| `tenant-a-editor` | `TenantA-Editor-2026` | Editor | same, and can edit the `tenant-a` folder |
-| `tenant-b` | `TenantB-Poc-2026` | Viewer | `SRE - all tenants` and the `tenant-b` folder |
-| `tenant-b-editor` | `TenantB-Editor-2026` | Editor | same, and can edit the `tenant-b` folder |
+| `admin` | `Adm1n-Poc-2026` | Admin | everything: all-tenants dashboard, `Platform (admins only)` folder, Explore |
+| `tenant-a` | `TenantA-Poc-2026` | Viewer | only the `tenant-a` folder |
+| `tenant-a-viewer2` | `TenantA-Viewer2-2026` | Viewer | only the `tenant-a` folder |
+| `tenant-b` | `TenantB-Poc-2026` | Viewer | only the `tenant-b` folder |
 
 These are plaintext PoC credentials (no secret management). Change them in `platform/monitoring/kps-values.yaml` and `tenants/*/values.yaml`.
 
-## Dashboards: the four golden signals from logs
+## What a tenant gets
 
-`SRE - all tenants / Golden signals (logs) - all tenants` is the home dashboard. It uses the `Loki (all namespaces)` datasource with a tenant (namespace) and application selector, and is built from the demo nginx JSON access log (`status`, `request_time`):
+Read-only access to the dashboards in the tenant's folder. The namespace is written into every query, so the URL and filters cannot switch to another tenant. The home page is the tenant's own overview. Explore is not available to Viewers, and dashboards cannot be edited.
 
-| Signal | Panels |
-|---|---|
-| Traffic | requests/s by tenant and by status class |
-| Errors | 5xx/s, error ratio, availability against a 99.5% SLO, recent 5xx lines |
-| Latency | p50/p95/p99 and average by tenant, slow requests (> 1s) |
-| Saturation | 429/503 responses, share of slow requests, log throughput, resource-pressure messages |
+| Dashboard | Content | Filters |
+|---|---|---|
+| Overview - metrics | running pods, restarts, CPU, memory, network, HTTP request rate | time range, pod |
+| Logs and golden signals | traffic, errors, latency and saturation from the JSON access log, plus a searchable log view | time range, application, pod, container, HTTP status class, keyword/regex |
 
-Every tenant also gets the same dashboard pre-filtered to its namespace in its own folder. The dashboard is a Grafana JSON document (`charts/reconciler/files/golden-signals-logs.json`; Grafana has no XML dashboard format) and is imported by the reconciler. Other applications need a JSON access log with `status` and `request_time` to light up the HTTP panels.
+`SRE - all tenants (admins only) / Golden signals (logs) - all tenants` is the admin home page and shows every namespace. The Loki data sent to a tenant's dashboards goes through a datasource that only sends that tenant's Loki header.
+
+Other applications need a JSON access log with `status` and `request_time` to light up the HTTP panels (the demo nginx logs are an example).
 
 ## How privileges work
 
-All accounts live in one shared Grafana org (`Monitoring`). Privileges are controlled with member accounts:
+All accounts live in one shared Grafana org (`Monitoring`).
 
-- Org role per member: `Viewer`, `Editor` or `Admin`.
-- One team and one folder per tenant. The team can view the folder; members with the `Editor` role can also edit it. The `SRE - all tenants` folder is visible to every member, and the built-in infrastructure dashboards are in `Platform (admins only)`.
-- Members are defined in `tenants/<name>/values.yaml` (`members:` list) and created by the `grafana-reconciler` CronJob (every 2 minutes). Accounts created by hand in the Grafana UI (Administration > Users) are left alone, so an admin can also add members there.
-- Alerting: each tenant gets an `AlertmanagerConfig`; the operator adds a namespace matcher so routes only match that tenant's alerts.
+- Tenant members are always read-only `Viewer`s, one team and one folder per tenant. Only the team can open its folder. The `SRE - all tenants` folder and the built-in `Platform (admins only)` folder have no team access, so only org admins see them.
+- Members are defined in `tenants/<name>/values.yaml` (`members:` list: login, password, optional email) and created by the `grafana-reconciler` CronJob (every 2 minutes). Removing a member from Git deletes the account (admins are never deleted). Do not give tenant members Editor or Admin: Editors can use Explore and edit queries; the reconciler forces tenants to Viewer.
+- Alerting: each tenant gets an `AlertmanagerConfig`; the operator adds a namespace matcher. The Grafana alerting UI is turned off so Viewers cannot browse other namespaces' alerts.
 
-**Limitation:** Grafana OSS cannot restrict datasource access per user. In the shared org every member can query the shared Loki and Prometheus datasources (for example in Explore), so folders and roles limit dashboards and edit rights, not data. Hard per-tenant data isolation needs one org per tenant (the previous design) or an identity-aware proxy.
+**Limitation:** isolation is by dashboards only. Viewers cannot use Explore or edit queries, but Grafana OSS cannot restrict datasource access per user: a tenant who calls Grafana's query API directly with their own login can query the shared Prometheus and Loki datasources for any namespace. If you need hard isolation, put an identity-aware gateway in front of Loki and Prometheus, or use one org per tenant.
 
 ### Add a tenant or a member
 
-Create `tenants/<name>/values.yaml` (copy `tenants/tenant-a/values.yaml`; the directory name must equal the namespace) and push. The ApplicationSets create the namespace, alerting, the Grafana team, folder, members and the demo workload. To add a member to an existing tenant, append to its `members:` list.
-Removing a tenant or member from Git does not delete the Grafana team, folder or user.
+Create `tenants/<name>/values.yaml` (copy `tenants/tenant-a/values.yaml`; the directory name must equal the namespace) and push. The ApplicationSets create the namespace, alerting, the Grafana team, folder, members, dashboards and the demo workload. To add a login to an existing tenant, append to its `members:` list.
+Removing a tenant directory removes its Kubernetes resources, but its Grafana team, folder and dashboards are not deleted automatically.
 
 ## Verify
 
@@ -111,7 +109,7 @@ kubectl -n monitoring create job --from=cronjob/grafana-reconciler reconcile-now
 kubectl -n monitoring logs job/reconcile-now
 ```
 
-In Grafana: log in as `tenant-a`; the home dashboard shows the golden signals for all tenants and the `tenant-a` folder holds the same dashboard filtered to `tenant-a`. `tenant-a` cannot see the `tenant-b` folder or `Platform (admins only)`; `tenant-a-editor` can edit the `tenant-a` folder but `tenant-a` (Viewer) cannot.
+In Grafana: log in as `tenant-a`; the home page is the `tenant-a` overview, the folder also holds the logs dashboard, and no other folder is visible. Changing filters or the URL cannot reach another namespace's data in the dashboards. `tenant-a` cannot edit, and has no Explore.
 
 Prometheus targets (admin): kubelet, apiserver, etcd, kube-controller-manager, kube-scheduler, kube-proxy, coredns, Longhorn, Istio, demo apps.
 
