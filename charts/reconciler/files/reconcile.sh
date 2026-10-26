@@ -4,7 +4,6 @@
 set -uo pipefail
 
 GRAFANA_URL="${GRAFANA_URL:?}"
-LOKI_URL="${LOKI_URL:?}"
 GF_USER="${GF_USER:?}"
 GF_PASS="${GF_PASS:?}"
 NS="${POD_NAMESPACE:-monitoring}"
@@ -35,21 +34,11 @@ wait_for_grafana() {
   return 1
 }
 
-loki_datasource_body() {
-  local uid=$1 name=$2 tenant_header=$3
-  jq -n --arg u "$LOKI_URL" --arg id "$uid" --arg n "$name" --arg v "$tenant_header" \
-    '{name:$n,uid:$id,type:"loki",access:"proxy",url:$u,jsonData:{httpHeaderName1:"X-Scope-OrgID"},secureJsonData:{httpHeaderValue1:$v}}'
-}
-
-upsert_datasource() {
-  local uid=$1 body=$2
-  gf GET "/api/datasources/uid/$uid"
-  if [[ $CODE == 200 ]]; then
-    gf PUT "/api/datasources/uid/$uid" "$body"
-  else
-    gf POST /api/datasources "$body"
-  fi
-  [[ $CODE == 200 ]] || log "datasource $uid failed ($CODE) $OUT"
+# Earlier versions created one Loki datasource per tenant plus an all-namespaces one; Grafana now has a single Loki datasource.
+drop_datasource() {
+  gf DELETE "/api/datasources/uid/$1"
+  [[ $CODE == 200 ]] && log "removed datasource $1"
+  return 0
 }
 
 ensure_folder() {
@@ -73,12 +62,12 @@ import_dashboard() {
   [[ $CODE == 200 ]] || log "dashboard import into $folder failed ($CODE) $OUT"
 }
 
-# render_dashboard FILE UID TITLE NS_REGEX NS_LIST LOKI_UID: bakes the tenant's namespaces and datasources into a dashboard template.
+# render_dashboard FILE UID TITLE NS_REGEX NS_LIST: bakes the tenant's namespaces into a dashboard template.
 # The namespace filter variable is hidden when the tenant has a single namespace.
 render_dashboard() {
-  local file=$1 uid=$2 title=$3 regex=$4 list=$5 loki=$6 hide=0
+  local file=$1 uid=$2 title=$3 regex=$4 list=$5 hide=0
   [[ "$list" == *,* ]] || hide=2
-  sed -e "s/__NAMESPACE__/$regex/g" -e "s/__NS_LIST__/$list/g" -e "s/__LOKI_UID__/$loki/g" -e "s/__PROM_UID__/prometheus/g" "$file" \
+  sed -e "s/__NAMESPACE__/$regex/g" -e "s/__NS_LIST__/$list/g" -e "s/__PROM_UID__/prometheus/g" "$file" \
     | jq --arg u "$uid" --arg t "$title" --argjson h "$hide" \
         '.uid=$u | .title=$t | (.templating.list[] | select(.name=="nsfilter")).hide = $h'
 }
@@ -165,8 +154,7 @@ restrict_platform_folder() {
 }
 
 reconcile_shared() {
-  local all=$1
-  upsert_datasource loki-all "$(loki_datasource_body loki-all "Loki (all namespaces)" "$all")"
+  drop_datasource loki-all
 
   restrict_platform_folder
   gf PUT /api/orgs/1 '{"name":"Monitoring"}'
@@ -180,8 +168,8 @@ reconcile_shared() {
 
 reconcile_tenant() {
   local tenant=$1 namespaces=$2 members=$3 admin_id=$4
-  local team folder keep='[]' row login email pass role uid loki="loki-$tenant" regex list
-  # Namespaces become a regex for queries and a multi-tenant Loki header (both use "|"), and a comma list for the filter.
+  local team folder keep='[]' row login email pass role uid regex list
+  # Namespaces become a regex for the queries and a comma list for the filter.
   regex=$(jq -r 'join("|")' <<<"$namespaces")
   list=$(jq -r 'join(",")' <<<"$namespaces")
   log "tenant $tenant (namespaces $list)"
@@ -191,9 +179,7 @@ reconcile_tenant() {
   ensure_folder "$folder" "$tenant" || return 1
   # Grafana adds the creator to the team; admins use the org home page instead of a tenant home.
   gf DELETE "/api/teams/$team/members/$admin_id"
-
-  # Logs go through a datasource that sends only this tenant's Loki header.
-  upsert_datasource "$loki" "$(loki_datasource_body "$loki" "Loki ($tenant)" "$regex")"
+  drop_datasource "loki-$tenant"
 
   while read -r row; do
     [[ -n "$row" ]] || continue
@@ -214,8 +200,8 @@ reconcile_tenant() {
   # Only the team (read-only) can open the tenant folder.
   set_folder_permissions "$folder" "$(jq -n --argjson t "$team" '[{teamId:$t,permission:1}]')"
 
-  import_dashboard "$folder" "$(render_dashboard "$DASH_DIR/tenant-overview.json" "overview-$tenant" "Overview - metrics" "$regex" "$list" "$loki")"
-  import_dashboard "$folder" "$(render_dashboard "$DASH_DIR/tenant-logs.json" "logs-$tenant" "Logs and golden signals" "$regex" "$list" "$loki")"
+  import_dashboard "$folder" "$(render_dashboard "$DASH_DIR/tenant-overview.json" "overview-$tenant" "Overview - metrics" "$regex" "$list")"
+  import_dashboard "$folder" "$(render_dashboard "$DASH_DIR/tenant-logs.json" "logs-$tenant" "Logs and golden signals" "$regex" "$list")"
   gf PUT "/api/teams/$team/preferences" "$(jq -n --arg u "overview-$tenant" '{homeDashboardUID:$u}')"
 
   # Dashboards from the earlier shared-filter design.
@@ -223,16 +209,13 @@ reconcile_tenant() {
 }
 
 main() {
-  local failed=0 row all admin_id
+  local failed=0 row admin_id
   wait_for_grafana || exit 1
 
   gf GET /api/user
   admin_id=$(jq -r .id <<<"$OUT")
 
-  # The admin sees logs of every namespace through Loki's multi-tenant query syntax.
-  all=$(kubectl get ns -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | paste -sd'|' -)
-  [[ -n "$all" ]] || { log "no namespaces found"; exit 1; }
-  reconcile_shared "$all" || failed=1
+  reconcile_shared || failed=1
 
   # A login may belong to several tenants; it is only deleted when no tenant lists it any more.
   ALL_LOGINS=$(kubectl -n "$NS" get secrets -l monitoring.poc/tenant=true -o json \

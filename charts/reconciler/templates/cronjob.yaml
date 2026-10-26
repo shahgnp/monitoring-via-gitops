@@ -61,8 +61,6 @@ spec:
                       fieldPath: metadata.namespace
                 - name: GRAFANA_URL
                   value: {{ .Values.grafana.url | quote }}
-                - name: LOKI_URL
-                  value: {{ .Values.lokiUrl | quote }}
                 - name: GF_USER
                   valueFrom:
                     secretKeyRef:

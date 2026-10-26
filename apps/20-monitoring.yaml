@@ -25,7 +25,7 @@ spec:
     syncOptions: [ServerSideApply=true]
     retry: { limit: 10, backoff: { duration: 15s, factor: 2, maxDuration: 5m } }
 ---
-# Wave 1: Loki (multi-tenant, filesystem storage on Longhorn)
+# Wave 1: Loki (single-tenant, filesystem storage on Longhorn)
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

@@ -45,25 +45,10 @@ alloy:
           source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
           target_label  = "app"
         }
-        // The Loki tenant is the namespace, which keeps tenants isolated at query time.
-        rule {
-          source_labels = ["__meta_kubernetes_namespace"]
-          target_label  = "tenant"
-        }
       }
 
       loki.source.kubernetes "pods" {
         targets    = discovery.relabel.pods.output
-        forward_to = [loki.process.tenant.receiver]
-      }
-
-      loki.process "tenant" {
-        stage.tenant {
-          label = "tenant"
-        }
-        stage.label_drop {
-          values = ["tenant"]
-        }
         forward_to = [loki.write.loki.receiver]
       }
 

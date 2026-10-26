@@ -159,6 +159,13 @@ grafana:
       enabled: false
     alerting:
       enabled: false
+  # One shared Loki datasource (uid "loki"); the dashboards fix the namespaces in their queries.
+  additionalDataSources:
+    - name: Loki
+      uid: loki
+      type: loki
+      access: proxy
+      url: http://loki.monitoring.svc.cluster.local:3100
   sidecar:
     dashboards:
       enabled: true

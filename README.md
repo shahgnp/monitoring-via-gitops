@@ -9,7 +9,7 @@ RKE2 (CIS profile) on AWS plus a GitOps-managed, multi-tenant monitoring stack d
 | Cloud integration | aws-cloud-controller-manager (Service type `LoadBalancer` creates an NLB) |
 | GitOps | ArgoCD installed on the new cluster, app-of-apps from `apps/` |
 | Platform | cert-manager (self-signed CA), Longhorn, Istio (gateway), kube-prometheus-stack (Prometheus, Alertmanager, Grafana), Loki, Alloy |
-| Tenancy | One shared Grafana org; tenants are read-only Viewers who only see their own folder (dashboards with the namespace baked in); Loki tenant = namespace; reconciler CronJob |
+| Tenancy | One shared Grafana org with one Prometheus and one Loki datasource; tenants are read-only Viewers who only see their own folder (dashboards with the namespaces baked in); reconciler CronJob |
 | Demo tenants | `tenant-a`, `tenant-b` |
 
 ## Layout
@@ -80,7 +80,7 @@ Read-only access to the dashboards in the tenant's folder. The namespace is writ
 | Overview - metrics | running pods, restarts, CPU, memory, network, HTTP request rate | time range, pod |
 | Logs and golden signals | traffic, errors, latency and saturation from the JSON access log, plus a searchable log view | time range, application, pod, container, HTTP status class, keyword/regex |
 
-`SRE - all tenants (admins only) / Golden signals (logs) - all tenants` is the admin home page and shows every namespace. The Loki data sent to a tenant's dashboards goes through a datasource that only sends that tenant's Loki header.
+`SRE - all tenants (admins only) / Golden signals (logs) - all tenants` is the admin home page and shows every namespace. Loki is single-tenant and Grafana has one shared Loki datasource and one Prometheus datasource.
 
 Other applications need a JSON access log with `status` and `request_time` to light up the HTTP panels (the demo nginx logs are an example).
 

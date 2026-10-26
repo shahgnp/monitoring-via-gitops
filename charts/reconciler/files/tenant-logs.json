@@ -27,7 +27,7 @@
         "name": "app",
         "label": "Application",
         "type": "query",
-        "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+        "datasource": { "type": "loki", "uid": "loki" },
         "definition": "label_values({namespace=~\"__NAMESPACE__\", namespace=~\"$nsfilter\"}, app)",
         "query": { "label": "app", "refId": "LokiVariableQueryEditor-VariableQuery", "stream": "{namespace=~\"__NAMESPACE__\", namespace=~\"$nsfilter\"}", "type": 1 },
         "refresh": 2,
@@ -41,7 +41,7 @@
         "name": "pod",
         "label": "Pod",
         "type": "query",
-        "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+        "datasource": { "type": "loki", "uid": "loki" },
         "definition": "label_values({namespace=~\"__NAMESPACE__\", namespace=~\"$nsfilter\", app=~\"$app\"}, pod)",
         "query": { "label": "pod", "refId": "LokiVariableQueryEditor-VariableQuery", "stream": "{namespace=~\"__NAMESPACE__\", namespace=~\"$nsfilter\", app=~\"$app\"}", "type": 1 },
         "refresh": 2,
@@ -55,7 +55,7 @@
         "name": "container",
         "label": "Container",
         "type": "query",
-        "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+        "datasource": { "type": "loki", "uid": "loki" },
         "definition": "label_values({namespace=~\"__NAMESPACE__\", namespace=~\"$nsfilter\", pod=~\"$pod\"}, container)",
         "query": { "label": "container", "refId": "LokiVariableQueryEditor-VariableQuery", "stream": "{namespace=~\"__NAMESPACE__\", namespace=~\"$nsfilter\", pod=~\"$pod\"}", "type": 1 },
         "refresh": 2,
@@ -102,7 +102,7 @@
       "id": 2,
       "type": "stat",
       "title": "Availability (non-5xx)",
-      "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 5, "w": 6, "x": 0, "y": 1 },
       "fieldConfig": {
         "defaults": {
@@ -127,7 +127,7 @@
       "id": 3,
       "type": "stat",
       "title": "Traffic (requests/s)",
-      "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 5, "w": 6, "x": 6, "y": 1 },
       "fieldConfig": { "defaults": { "unit": "reqps", "decimals": 2 }, "overrides": [] },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "none" },
@@ -143,7 +143,7 @@
       "id": 4,
       "type": "stat",
       "title": "Error ratio (5xx)",
-      "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 5, "w": 6, "x": 12, "y": 1 },
       "fieldConfig": {
         "defaults": {
@@ -166,7 +166,7 @@
       "id": 5,
       "type": "stat",
       "title": "p95 latency (slowest pod)",
-      "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 5, "w": 6, "x": 18, "y": 1 },
       "fieldConfig": {
         "defaults": {
@@ -196,7 +196,7 @@
       "id": 11,
       "type": "timeseries",
       "title": "Requests/s by pod",
-      "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 7 },
       "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 15, "stacking": { "mode": "normal" } } }, "overrides": [] },
       "targets": [
@@ -211,7 +211,7 @@
       "id": 12,
       "type": "timeseries",
       "title": "Requests/s by status class",
-      "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 7 },
       "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 15, "stacking": { "mode": "normal" } } }, "overrides": [] },
       "targets": [
@@ -232,7 +232,7 @@
       "id": 21,
       "type": "timeseries",
       "title": "5xx responses/s by pod",
-      "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
       "fieldConfig": { "defaults": { "unit": "reqps", "color": { "mode": "fixed", "fixedColor": "red" }, "custom": { "fillOpacity": 15 } }, "overrides": [] },
       "targets": [
@@ -247,7 +247,7 @@
       "id": 22,
       "type": "timeseries",
       "title": "Error ratio by pod (%)",
-      "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
       "fieldConfig": {
         "defaults": {
@@ -270,7 +270,7 @@
       "id": 23,
       "type": "logs",
       "title": "Recent 5xx log lines",
-      "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
       "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true },
       "targets": [
@@ -288,7 +288,7 @@
       "id": 31,
       "type": "timeseries",
       "title": "Latency percentiles",
-      "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 16, "x": 0, "y": 33 },
       "fieldConfig": { "defaults": { "unit": "s", "min": 0 }, "overrides": [] },
       "targets": [
@@ -313,7 +313,7 @@
       "id": 32,
       "type": "timeseries",
       "title": "Average latency by pod",
-      "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 33 },
       "fieldConfig": { "defaults": { "unit": "s", "min": 0 }, "overrides": [] },
       "targets": [
@@ -328,7 +328,7 @@
       "id": 33,
       "type": "logs",
       "title": "Slow requests (> 1s)",
-      "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 41 },
       "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true },
       "targets": [
@@ -346,7 +346,7 @@
       "id": 41,
       "type": "timeseries",
       "title": "Throttled / unavailable responses/s (429, 503)",
-      "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 50 },
       "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 15 } }, "overrides": [] },
       "targets": [
@@ -361,7 +361,7 @@
       "id": 42,
       "type": "timeseries",
       "title": "Slow request share (> 1s, %)",
-      "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 8, "x": 8, "y": 50 },
       "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 }, "overrides": [] },
       "targets": [
@@ -376,7 +376,7 @@
       "id": 43,
       "type": "timeseries",
       "title": "Log throughput (lines/s) by pod",
-      "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 50 },
       "fieldConfig": { "defaults": { "unit": "logs/s", "custom": { "fillOpacity": 15, "stacking": { "mode": "normal" } } }, "overrides": [] },
       "targets": [
@@ -391,7 +391,7 @@
       "id": 44,
       "type": "logs",
       "title": "Resource pressure messages",
-      "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 58 },
       "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true },
       "targets": [
@@ -409,7 +409,7 @@
       "id": 51,
       "type": "logs",
       "title": "Logs",
-      "datasource": { "type": "loki", "uid": "__LOKI_UID__" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 14, "w": 24, "x": 0, "y": 67 },
       "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true },
       "targets": [

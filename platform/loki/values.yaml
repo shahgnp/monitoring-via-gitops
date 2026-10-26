@@ -1,7 +1,8 @@
 deploymentMode: SingleBinary
 
 loki:
-  auth_enabled: true
+  # Single tenant: access control is handled by Grafana, so Loki does not need per-namespace tenants.
+  auth_enabled: false
   commonConfig:
     replication_factor: 1
   storage:
@@ -22,8 +23,6 @@ loki:
   compactor:
     retention_enabled: true
     delete_request_store: filesystem
-  querier:
-    multi_tenant_queries_enabled: true
   podSecurityContext:
     fsGroup: 10001
     runAsGroup: 10001

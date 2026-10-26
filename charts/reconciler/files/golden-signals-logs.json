@@ -11,19 +11,10 @@
   "templating": {
     "list": [
       {
-        "name": "ds",
-        "label": "Loki datasource",
-        "type": "datasource",
-        "query": "loki",
-        "refresh": 1,
-        "hide": 0,
-        "current": { "text": "Loki (all namespaces)", "value": "loki-all" }
-      },
-      {
         "name": "namespace",
         "label": "Tenant (namespace)",
         "type": "query",
-        "datasource": { "type": "loki", "uid": "${ds}" },
+        "datasource": { "type": "loki", "uid": "loki" },
         "definition": "label_values(namespace)",
         "query": { "label": "namespace", "refId": "LokiVariableQueryEditor-VariableQuery", "stream": "", "type": 1 },
         "refresh": 2,
@@ -37,7 +28,7 @@
         "name": "app",
         "label": "Application",
         "type": "query",
-        "datasource": { "type": "loki", "uid": "${ds}" },
+        "datasource": { "type": "loki", "uid": "loki" },
         "definition": "label_values({namespace=~\"$namespace\"}, app)",
         "query": { "label": "app", "refId": "LokiVariableQueryEditor-VariableQuery", "stream": "{namespace=~\"$namespace\"}", "type": 1 },
         "refresh": 2,
@@ -68,7 +59,7 @@
       "id": 2,
       "type": "stat",
       "title": "Availability (non-5xx)",
-      "datasource": { "type": "loki", "uid": "${ds}" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 5, "w": 6, "x": 0, "y": 1 },
       "fieldConfig": {
         "defaults": {
@@ -100,7 +91,7 @@
       "id": 3,
       "type": "stat",
       "title": "Traffic (requests/s)",
-      "datasource": { "type": "loki", "uid": "${ds}" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 5, "w": 6, "x": 6, "y": 1 },
       "fieldConfig": { "defaults": { "unit": "reqps", "decimals": 2 }, "overrides": [] },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "area" },
@@ -116,7 +107,7 @@
       "id": 4,
       "type": "stat",
       "title": "Error ratio (5xx)",
-      "datasource": { "type": "loki", "uid": "${ds}" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 5, "w": 6, "x": 12, "y": 1 },
       "fieldConfig": {
         "defaults": {
@@ -146,7 +137,7 @@
       "id": 5,
       "type": "stat",
       "title": "p95 latency (worst tenant)",
-      "datasource": { "type": "loki", "uid": "${ds}" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 5, "w": 6, "x": 18, "y": 1 },
       "fieldConfig": {
         "defaults": {
@@ -183,7 +174,7 @@
       "id": 11,
       "type": "timeseries",
       "title": "Requests/s by tenant",
-      "datasource": { "type": "loki", "uid": "${ds}" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 7 },
       "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 15, "stacking": { "mode": "normal" } } }, "overrides": [] },
       "targets": [
@@ -198,7 +189,7 @@
       "id": 12,
       "type": "timeseries",
       "title": "Requests/s by status class",
-      "datasource": { "type": "loki", "uid": "${ds}" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 7 },
       "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 15, "stacking": { "mode": "normal" } } }, "overrides": [] },
       "targets": [
@@ -219,7 +210,7 @@
       "id": 21,
       "type": "timeseries",
       "title": "5xx responses/s by tenant",
-      "datasource": { "type": "loki", "uid": "${ds}" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
       "fieldConfig": { "defaults": { "unit": "reqps", "color": { "mode": "fixed", "fixedColor": "red" }, "custom": { "fillOpacity": 15 } }, "overrides": [] },
       "targets": [
@@ -234,7 +225,7 @@
       "id": 22,
       "type": "timeseries",
       "title": "Error ratio by tenant (%)",
-      "datasource": { "type": "loki", "uid": "${ds}" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
       "fieldConfig": {
         "defaults": {
@@ -257,7 +248,7 @@
       "id": 23,
       "type": "logs",
       "title": "Recent 5xx log lines",
-      "datasource": { "type": "loki", "uid": "${ds}" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
       "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true },
       "targets": [
@@ -275,7 +266,7 @@
       "id": 31,
       "type": "timeseries",
       "title": "Latency percentiles by tenant",
-      "datasource": { "type": "loki", "uid": "${ds}" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 16, "x": 0, "y": 33 },
       "fieldConfig": { "defaults": { "unit": "s", "min": 0 }, "overrides": [] },
       "targets": [
@@ -300,7 +291,7 @@
       "id": 32,
       "type": "timeseries",
       "title": "Average latency by tenant",
-      "datasource": { "type": "loki", "uid": "${ds}" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 33 },
       "fieldConfig": { "defaults": { "unit": "s", "min": 0 }, "overrides": [] },
       "targets": [
@@ -315,7 +306,7 @@
       "id": 33,
       "type": "logs",
       "title": "Slow requests (> 1s)",
-      "datasource": { "type": "loki", "uid": "${ds}" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 41 },
       "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true },
       "targets": [
@@ -333,7 +324,7 @@
       "id": 41,
       "type": "timeseries",
       "title": "Throttled / unavailable responses/s (429, 503)",
-      "datasource": { "type": "loki", "uid": "${ds}" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 50 },
       "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 15 } }, "overrides": [] },
       "targets": [
@@ -348,7 +339,7 @@
       "id": 42,
       "type": "timeseries",
       "title": "Slow request share (> 1s, %)",
-      "datasource": { "type": "loki", "uid": "${ds}" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 8, "x": 8, "y": 50 },
       "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 }, "overrides": [] },
       "targets": [
@@ -363,7 +354,7 @@
       "id": 43,
       "type": "timeseries",
       "title": "Log throughput (lines/s) by tenant",
-      "datasource": { "type": "loki", "uid": "${ds}" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 50 },
       "fieldConfig": { "defaults": { "unit": "logs/s", "custom": { "fillOpacity": 15, "stacking": { "mode": "normal" } } }, "overrides": [] },
       "targets": [
@@ -378,7 +369,7 @@
       "id": 44,
       "type": "logs",
       "title": "Resource pressure messages",
-      "datasource": { "type": "loki", "uid": "${ds}" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 58 },
       "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true },
       "targets": [
@@ -396,7 +387,7 @@
       "id": 51,
       "type": "logs",
       "title": "Logs (filter with the search box above)",
-      "datasource": { "type": "loki", "uid": "${ds}" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 12, "w": 24, "x": 0, "y": 67 },
       "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true },
       "targets": [
