@@ -25,6 +25,12 @@ server {
     default_type text/plain;
     return 200 "{{ repeat 300 "0123456789" }}\n";
   }
+  # limit_rate makes nginx itself take ~3s, so request_time in the access log shows real latency.
+  location = /slow {
+    alias /etc/nginx/payload.txt;
+    default_type text/plain;
+    limit_rate 1k;
+  }
   location = /health {
     access_log off;
     return 200 "ok\n";

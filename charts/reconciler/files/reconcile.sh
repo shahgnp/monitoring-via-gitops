@@ -146,6 +146,7 @@ reconcile_shared() {
     '{name:"Loki (all namespaces)",uid:"loki-all",type:"loki",access:"proxy",url:$u,jsonData:{httpHeaderName1:"X-Scope-OrgID"},secureJsonData:{httpHeaderValue1:$v}}')"
 
   restrict_platform_folder
+  gf PUT /api/orgs/1 '{"name":"Monitoring"}'
   ensure_folder "$SRE_FOLDER" "SRE - all tenants" || return 1
   set_folder_permissions "$SRE_FOLDER" '[{"role":"Viewer","permission":1},{"role":"Editor","permission":1}]'
   import_dashboard "$SRE_FOLDER" "$(cat "$DASHBOARD")"
