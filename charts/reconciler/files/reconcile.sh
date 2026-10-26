@@ -132,10 +132,20 @@ drop_legacy_org() {
   log "removed legacy org $name"
 }
 
+# The kube-prometheus-stack dashboards are provisioned into this folder; empty permissions leave it to org admins.
+restrict_platform_folder() {
+  local uid
+  gf GET /api/folders
+  uid=$(jq -r '.[] | select(.title=="Platform (admins only)") | .uid' <<<"$OUT" | head -n1)
+  [[ -n "$uid" ]] || { log "platform folder not provisioned yet"; return 0; }
+  set_folder_permissions "$uid" '[]'
+}
+
 reconcile_shared() {
   upsert_datasource loki-all "$(jq -n --arg u "$LOKI_URL" --arg v "$1" \
     '{name:"Loki (all namespaces)",uid:"loki-all",type:"loki",access:"proxy",url:$u,jsonData:{httpHeaderName1:"X-Scope-OrgID"},secureJsonData:{httpHeaderValue1:$v}}')"
 
+  restrict_platform_folder
   ensure_folder "$SRE_FOLDER" "SRE - all tenants" || return 1
   set_folder_permissions "$SRE_FOLDER" '[{"role":"Viewer","permission":1},{"role":"Editor","permission":1}]'
   import_dashboard "$SRE_FOLDER" "$(cat "$DASHBOARD")"

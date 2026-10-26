@@ -159,6 +159,12 @@ grafana:
       enabled: true
       searchNamespace: ALL
       label: grafana_dashboard
+      # Infrastructure dashboards go to a folder that the reconciler restricts to org admins.
+      annotations:
+        grafana_folder: Platform (admins only)
+      folderAnnotation: grafana_folder
+      provider:
+        foldersFromFilesStructure: true
     datasources:
       enabled: true
       defaultDatasourceEnabled: true
