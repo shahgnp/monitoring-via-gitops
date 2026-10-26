@@ -1,6 +1,10 @@
-# Demo tenant. The directory name must equal the namespace.
+# Demo tenant. The directory name must equal its first namespace (the demo workload deploys there).
 tenant: tenant-a
-namespace: tenant-a
+# One tenant can span several namespaces; its dashboards get a namespace filter.
+namespaces: [tenant-a, tenant-a-jobs]
+manageNamespace: true
+networkPolicy:
+  enabled: true
 # Grafana members: read-only Viewers of the shared org who only see this tenant's folder.
 # Add a login to give someone access; remove it to revoke (the account is deleted). PoC passwords in plaintext.
 members:

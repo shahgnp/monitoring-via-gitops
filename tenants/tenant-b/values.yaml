@@ -1,6 +1,9 @@
 # Demo tenant. The directory name must equal the namespace.
 tenant: tenant-b
-namespace: tenant-b
+namespaces: [tenant-b]
+manageNamespace: true
+networkPolicy:
+  enabled: true
 # Grafana members: read-only Viewers of the shared org who only see this tenant's folder.
 # Add a login to give someone access; remove it to revoke (the account is deleted). PoC passwords in plaintext.
 members:

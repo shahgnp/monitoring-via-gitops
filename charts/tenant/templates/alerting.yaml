@@ -1,29 +1,32 @@
+{{- range $ns := include "tenant.namespaces" . | fromJsonArray }}
+---
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
   name: tenant-alerts
-  namespace: {{ .Values.namespace }}
+  namespace: {{ $ns }}
 spec:
   groups:
-    - name: {{ .Values.tenant }}.rules
+    - name: {{ $.Values.tenant }}.rules
       rules:
         - alert: TenantTargetDown
-          expr: up{namespace="{{ .Values.namespace }}"} == 0
+          expr: up{namespace="{{ $ns }}"} == 0
           for: 5m
           labels:
             severity: warning
           annotations:
-            summary: A scrape target in {{ .Values.namespace }} is down
+            summary: A scrape target in {{ $ns }} is down
 ---
-# The operator adds namespace="<this namespace>" to every route, so alerts stay inside the tenant.
+# The operator adds namespace="<this namespace>" to every route, so alerts stay inside the namespace.
 apiVersion: monitoring.coreos.com/v1alpha1
 kind: AlertmanagerConfig
 metadata:
   name: tenant-routing
-  namespace: {{ .Values.namespace }}
+  namespace: {{ $ns }}
 spec:
   route:
     receiver: "null"
     groupBy: [alertname]
   receivers:
     - name: "null"
+{{- end }}

@@ -73,11 +73,14 @@ import_dashboard() {
   [[ $CODE == 200 ]] || log "dashboard import into $folder failed ($CODE) $OUT"
 }
 
-# render_dashboard FILE UID TITLE NAMESPACE LOKI_UID: bakes the namespace and datasources into a dashboard template.
+# render_dashboard FILE UID TITLE NS_REGEX NS_LIST LOKI_UID: bakes the tenant's namespaces and datasources into a dashboard template.
+# The namespace filter variable is hidden when the tenant has a single namespace.
 render_dashboard() {
-  local file=$1 uid=$2 title=$3 ns=$4 loki=$5
-  sed -e "s/__NAMESPACE__/$ns/g" -e "s/__LOKI_UID__/$loki/g" -e "s/__PROM_UID__/prometheus/g" "$file" \
-    | jq --arg u "$uid" --arg t "$title" '.uid=$u | .title=$t'
+  local file=$1 uid=$2 title=$3 regex=$4 list=$5 loki=$6 hide=0
+  [[ "$list" == *,* ]] || hide=2
+  sed -e "s/__NAMESPACE__/$regex/g" -e "s/__NS_LIST__/$list/g" -e "s/__LOKI_UID__/$loki/g" -e "s/__PROM_UID__/prometheus/g" "$file" \
+    | jq --arg u "$uid" --arg t "$title" --argjson h "$hide" \
+        '.uid=$u | .title=$t | (.templating.list[] | select(.name=="nsfilter")).hide = $h'
 }
 
 ensure_team() {
@@ -108,6 +111,7 @@ prune_team_members() {
     [[ -n "$uid" && "$uid" != "$admin_id" ]] || continue
     jq -e --argjson u "$uid" 'index($u)' <<<"$keep" >/dev/null 2>&1 && continue
     gf DELETE "/api/teams/$team/members/$uid"
+    if jq -e --arg l "$login" 'index($l)' <<<"$ALL_LOGINS" >/dev/null 2>&1; then continue; fi
     gf GET "/api/users/$uid"
     if [[ "$(jq -r .isGrafanaAdmin <<<"$OUT")" == "true" ]]; then continue; fi
     gf GET "/api/users/$uid/orgs"
@@ -175,9 +179,12 @@ reconcile_shared() {
 }
 
 reconcile_tenant() {
-  local tenant=$1 namespace=$2 members=$3 admin_id=$4
-  local team folder keep='[]' row login email pass role uid loki="loki-$tenant"
-  log "tenant $tenant (namespace $namespace)"
+  local tenant=$1 namespaces=$2 members=$3 admin_id=$4
+  local team folder keep='[]' row login email pass role uid loki="loki-$tenant" regex list
+  # Namespaces become a regex for queries and a multi-tenant Loki header (both use "|"), and a comma list for the filter.
+  regex=$(jq -r 'join("|")' <<<"$namespaces")
+  list=$(jq -r 'join(",")' <<<"$namespaces")
+  log "tenant $tenant (namespaces $list)"
 
   team=$(ensure_team "$tenant") || return 1
   folder="tenant-$tenant"
@@ -186,7 +193,7 @@ reconcile_tenant() {
   gf DELETE "/api/teams/$team/members/$admin_id"
 
   # Logs go through a datasource that sends only this tenant's Loki header.
-  upsert_datasource "$loki" "$(loki_datasource_body "$loki" "Loki ($tenant)" "$namespace")"
+  upsert_datasource "$loki" "$(loki_datasource_body "$loki" "Loki ($tenant)" "$regex")"
 
   while read -r row; do
     [[ -n "$row" ]] || continue
@@ -207,8 +214,8 @@ reconcile_tenant() {
   # Only the team (read-only) can open the tenant folder.
   set_folder_permissions "$folder" "$(jq -n --argjson t "$team" '[{teamId:$t,permission:1}]')"
 
-  import_dashboard "$folder" "$(render_dashboard "$DASH_DIR/tenant-overview.json" "overview-$tenant" "Overview - metrics" "$namespace" "$loki")"
-  import_dashboard "$folder" "$(render_dashboard "$DASH_DIR/tenant-logs.json" "logs-$tenant" "Logs and golden signals" "$namespace" "$loki")"
+  import_dashboard "$folder" "$(render_dashboard "$DASH_DIR/tenant-overview.json" "overview-$tenant" "Overview - metrics" "$regex" "$list" "$loki")"
+  import_dashboard "$folder" "$(render_dashboard "$DASH_DIR/tenant-logs.json" "logs-$tenant" "Logs and golden signals" "$regex" "$list" "$loki")"
   gf PUT "/api/teams/$team/preferences" "$(jq -n --arg u "overview-$tenant" '{homeDashboardUID:$u}')"
 
   # Dashboards from the earlier shared-filter design.
@@ -227,9 +234,16 @@ main() {
   [[ -n "$all" ]] || { log "no namespaces found"; exit 1; }
   reconcile_shared "$all" || failed=1
 
+  # A login may belong to several tenants; it is only deleted when no tenant lists it any more.
+  ALL_LOGINS=$(kubectl -n "$NS" get secrets -l monitoring.poc/tenant=true -o json \
+    | jq -c '[.items[].data.members | @base64d | fromjson | .[].login] | unique')
+
   while read -r row; do
     [[ -n "$row" ]] || continue
-    reconcile_tenant "$(jq -r .tenant <<<"$row")" "$(jq -r .namespace <<<"$row")" "$(jq -r .members <<<"$row")" "$admin_id" || failed=1
+    # `namespaces` is a JSON array stored as a string; older registry entries only have `namespace`.
+    reconcile_tenant "$(jq -r .tenant <<<"$row")" \
+      "$(jq -c 'if .namespaces then (.namespaces | fromjson) else [.namespace] end' <<<"$row")" \
+      "$(jq -r .members <<<"$row")" "$admin_id" || failed=1
   done < <(kubectl -n "$NS" get secrets -l monitoring.poc/tenant=true -o json | jq -c '.items[] | .data | map_values(@base64d)')
 
   exit "$failed"

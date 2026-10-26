@@ -1,7 +1,15 @@
 # Overridden by tenants/<name>/values.yaml.
 tenant: ""
-# One namespace per tenant; it must equal the tenants/<name> directory name.
+# The namespaces whose logs and metrics this tenant sees (one or more). Their dashboards are hard-wired to this list.
+namespaces: []
+# Single-namespace shorthand, used only when `namespaces` is empty.
 namespace: ""
+# true: create the namespaces (PSA restricted, default service account without token). Leave false for namespaces that already exist.
+manageNamespace: false
+networkPolicy:
+  # true: default-deny ingress in each tenant namespace, except same-namespace traffic and Prometheus scraping.
+  # Do not enable it for namespaces with workloads that receive outside traffic.
+  enabled: false
 # Grafana members of this tenant; they are always read-only Viewers. Each needs login, password and optionally email.
 members: []
 monitoringNamespace: monitoring

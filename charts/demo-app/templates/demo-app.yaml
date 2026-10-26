@@ -1,4 +1,4 @@
-{{- $ns := required "namespace is required" .Values.namespace -}}
+{{- $ns := .Release.Namespace -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:

@@ -1,6 +1,5 @@
 # Overridden by tenants/<name>/values.yaml.
 tenant: ""
-namespace: ""
 images:
   nginx: nginxinc/nginx-unprivileged:1.31.7-alpine
   exporter: nginx/nginx-prometheus-exporter:1.5.3
