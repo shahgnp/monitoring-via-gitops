@@ -17,7 +17,7 @@ loki:
           prefix: loki_index_
           period: 24h
   limits_config:
-    retention_period: 168h
+    retention_period: 1440h
     allow_structured_metadata: 
     volume_enabled: true
   compactor:
@@ -41,7 +41,7 @@ singleBinary:
       memory: 1Gi
   persistence:
     enabled: true
-    size: 10Gi
+    size: 20Gi
     storageClass: longhorn
 
 # Disable the scalable-mode components, caches, gateway, canary and bundled MinIO.
