@@ -1,0 +1,14 @@
+# Removes the Alertmanager datasource that earlier deployments provisioned; Viewers could otherwise query every namespace's alerts.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasource-cleanup
+  namespace: monitoring
+  labels:
+    grafana_datasource: "1"
+data:
+  cleanup.yaml: |
+    apiVersion: 1
+    deleteDatasources:
+      - name: Alertmanager
+        orgId: 1
